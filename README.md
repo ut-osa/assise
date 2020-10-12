@@ -1,4 +1,4 @@
-Assise - Private repository
+Assise: Performance and Availability via Client-local NVM in a Distributed File System
 ===========================
 
 This repository contains the source code for Assise in addition to various benchmarks and applications
