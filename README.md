@@ -17,11 +17,11 @@ version 5.4.0.
 ## Getting Started ##
 Assume the current directory is the project's root directory.
 
-##### [1. Build & Install dependencies](#markdown-header-dependencies)
+##### [1. Build & Install dependencies](#dependencies)
 
-##### [2. Configure Storage](#markdown-header-storage-configuration)
+##### [2. Configure Storage](#storage-configuration)
     
-##### [3. Configure Cluster](#markdown-header-cluster-configuration)
+##### [3. Configure Cluster](#cluster-configuration)
 
 ##### 4. Build Assise
 
@@ -40,7 +40,7 @@ cd kernfs; make clean; make; cd tests; make clean; make; cd ../..
 cd kernfs/tests; ./mkfs.sh; cd ../..
 ~~~
 
-This will build your filesystem on all [configured devices](#markdown-header-storage-configuration)
+This will build your filesystem on all [configured devices](#storage-configuration)
 Before formatting your devices, make sure their storage sizes are appropriately configured.
 
 ##### 6. Run KernFS
@@ -85,7 +85,7 @@ ndctl create-namespace --region=region0 --mode=devdax --size=32G
 ~~~
 
 ####     b. Emulated NVM
-Alternatively, you can use DRAM to emulate NVM. To do so, follow the instructions in our [emulation guide](https://bitbucket.org/mlfs/assise-artifact/src/master/docs/emulation.md) or refer to this [article](https://software.intel.com/content/www/us/en/develop/articles/how-to-emulate-persistent-memory-on-an-intel-architecture-server.html).
+Alternatively, you can use DRAM to emulate NVM. To do so, follow the instructions in our [emulation guide](https://github.com/wreda/assise/blob/master/docs/emulation.md) or refer to this [article](https://software.intel.com/content/www/us/en/develop/articles/how-to-emulate-persistent-memory-on-an-intel-architecture-server.html).
 This will allocate DRAM devices (typically named '/mnt/pmemX'). To be usable by Assise, you need to convert them to DEV-DAX mode as follows:
 
 ~~~
@@ -106,7 +106,7 @@ This script sets the storage size reserved by Assise for each device. If using N
 ./utils/change_dev_size.py <NVM GB> <SSD GB/0> <HDD GB/0>
 ~~~
 
-**Note:** By default, at least 30 GB of NVM capacity is required for log allocation. The remainder is assigned to the filesystem's shared cache. To tune these parameters, refer to the [params](#markdown-header-other-params) section.
+**Note:** By default, at least 30 GB of NVM capacity is required for log allocation. The remainder is assigned to the filesystem's shared cache. To tune these parameters, refer to the [params](#other-params) section.
 
 ## Cluster Configuration ##
 
@@ -143,7 +143,7 @@ build-essential make pkg-config autoconf libnuma-dev libaio1 libaio-dev uuid-dev
 ~~~
 
 **Optional**
-To build SPDK (only required for [Advanced](#markdown-header-flags) Assise configurations):
+To build SPDK (only required for [Advanced](#flags) Assise configurations):
 ~~~
 cd deps; ./build_spdk.sh; cd ..
 ~~~
@@ -200,7 +200,7 @@ For more advanced configurations, we describe additional parameters.
 
 **A- Running mkfs.sh fails on mlfs_assert(file_size_blks > log_size_blks)**
 
-This indicates that the NVM device size defined during [step 2](#markdown-header-storage-configuration) is lower than the total log sizes. Either increase dev_size[g_log_dev] or reduce g_log_size.
+This indicates that the NVM device size defined during [step 2](#storage-configuration) is lower than the total log sizes. Either increase dev_size[g_log_dev] or reduce g_log_size.
 
 **B- LibFS exits with 'not enough space for patching around syscal libsyscall_intercept error'**
 
