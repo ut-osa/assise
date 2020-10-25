@@ -3,7 +3,7 @@ Assise
 
 Assise is a distributed file system designed to maximize the use of client-local NVM while providing linearizability for IO operations. Assise unleashes the performance of NVM via pervasive and persistent caching in process-local, socket-local, and node-local NVM. Assise accelerates POSIX file IO by orders of magnitude by leveraging client-local NVM without kernel involvement, block amplification, or unnecessary coherence overheads.
 
-Assise uses a userspace file system library -- LibFS -- that intercepts POSIX calls and turns them into function calls, allowing reads and writes to be served using loads and stores to a process-local NVM cache. We use a daemon called SharedFS to coordinate linearizable state among LibFS processes via leases. Our filesystem provides near-instantaneous application fail-over onto a hot replica that mirrors an application local file system cache in the replica.
+Assise uses a userspace file system library -- LibFS -- that intercepts POSIX calls and turns them into function calls, allowing reads and writes to be served using loads and stores to local NVM caches. We use a daemon called SharedFS to coordinate linearizable state among LibFS processes via leases. Our filesystem provides near-instantaneous application fail-over onto a hot replica that mirrors an application local file system cache in the replica.
 
 Our [OSDI paper](https://wreda.github.io/papers/assise-osdi20.pdf) describes our system in detail.
 
