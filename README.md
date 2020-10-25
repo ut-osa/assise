@@ -222,6 +222,9 @@ This is a known problem with libsyscall and libc v2.30-1 (see: [link](https://gi
 
 This indicates that KernFS is unreachable. Please make sure that KernFS is running and that its ports are not blocked by a firewall.
 
+## License
+This software is provided under the terms of the [GNU General Public License 2](https://www.gnu.org/licenses/gpl-2.0.html).
+
 ## Acknowledgements
 
 This work is supported in part by the European Commission (EACEA) (FPA 2012-0030), ERC grant 770889, NSF grant CNS-1900457, and the Texas Systems Research Consortium. This work is also supported by the National Research Foundation of Korea (NRF) grant funded by the Korea government (MSIT) (2020R1C1C1014940). We thank Intel for access to the evaluation testbed.
