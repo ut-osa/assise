@@ -211,14 +211,14 @@ For more advanced configurations, we describe additional parameters.
 ## Troubleshooting ##
 
 
-**A- Running mkfs.sh fails on mlfs_assert(file_size_blks > log_size_blks)**
+**A- Running mkfs.sh fails with ''mlfs_assert(file_size_blks > log_size_blks)''**
 
 This indicates that the NVM device size defined during [step 2](#storage-configuration) is lower than the total log sizes. Either increase dev_size[g_log_dev] or reduce g_log_size.
 
-**B- LibFS exits with 'not enough space for patching around syscal libsyscall_intercept error'**
+**B- LibFS exits with ''not enough space for patching around syscal libsyscall_intercept error''**
 
 This is a known problem with libsyscall and libc v2.30-1 (see: [link](https://github.com/pmem/syscall_intercept/issues/97)). To workaround this problem, please downgrade libc to v2.29-4 or below.
 
-**C- LibFS exits with 'Unable to connect [error code: 111]'**
+**C- LibFS exits with ''Unable to connect [error code: 111]''**
 
 This indicates that KernFS is unreachable. Please make sure that KernFS is running and that its ports are not blocked by a firewall.
