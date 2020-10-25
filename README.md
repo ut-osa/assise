@@ -95,7 +95,7 @@ ndctl create-namespace --region=region0 --mode=devdax --size=32G
 ~~~
 
 ####     b. Emulated NVM
-Alternatively, you can use DRAM to emulate NVM. To do so, follow the instructions in our [emulation guide](https://github.com/wreda/assise/blob/master/docs/emulation.md) or refer to this [article](https://software.intel.com/content/www/us/en/develop/articles/how-to-emulate-persistent-memory-on-an-intel-architecture-server.html).
+Alternatively, you can use DRAM to emulate NVM. To do so, follow the instructions in our [emulation guide](https://github.com/ut-osa/assise/blob/master/docs/emulation.md) or refer to this [article](https://software.intel.com/content/www/us/en/develop/articles/how-to-emulate-persistent-memory-on-an-intel-architecture-server.html).
 This will allocate DRAM devices (typically named '/mnt/pmemX'). To be usable by Assise, you need to convert them to DEV-DAX mode as follows:
 
 ~~~
