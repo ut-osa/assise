@@ -11,6 +11,7 @@ To cite us, you can use the following BibTex entry:
 ```
 @inproceedings {assise,
 title = {Assise: Performance and Availability via Client-local {NVM} in a Distributed File System},
+author={Anderson, Thomas E and Canini, Marco and Kim, Jongyul and Kosti{\'c}, Dejan and Kwon, Youngjin and Peter, Simon and Reda, Waleed and Schuh, Henry N and Witchel, Emmett},
 booktitle = {14th {USENIX} Symposium on Operating Systems Design and Implementation ({OSDI} 20)},
 year = {2020},
 url = {https://www.usenix.org/conference/osdi20/presentation/anderson},
