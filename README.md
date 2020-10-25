@@ -1,11 +1,21 @@
-Assise: Performance and Availability via Client-local NVM in a Distributed File System
+Assise
 ===========================
 
-This repository contains the source code for Assise in addition to various benchmarks and applications
-that have been used with our filesystem.
+Assise is a distributed file system designed to maximize the use of client-local NVM while providing linearizability for IO operations. Assise unleashes the performance of NVM via pervasive and persistent caching in process-local, socket-local, and node-local NVM. Assise accelerates POSIX file IO by orders of magnitude by leveraging client-local NVM without kernel involvement, block amplification, or unnecessary coherence overheads. To do so, Assise uses a userspace file system library -- LibFS -- that intercepts POSIX calls and turns them into function calls, allowing reads and writes to be served using processor loads and stores. We use a daemon called SharedFS to coordinate linearizable state among LibFS processes via leases. Our filesystem also provides near-instantaneous application fail-over onto a hot replica that mirrors an application local file system cache in the replicabAssise is a distributed file system designed to maximize the use of client-local NVM while providing linearizability for IO operations. Assise unleashes the performance of NVM via pervasive and persistent caching in process-local, socket-local, and node-local NVM. Assise accelerates POSIX file IO by orders of magnitude by leveraging client-local NVM without kernel involvement, block amplification, or unnecessary coherence overheads. To do so, Assise uses a userspace file system library -- LibFS -- that intercepts POSIX calls and turns them into function calls, allowing reads and writes to be served using processor loads and stores. We use a daemon called SharedFS to coordinate linearizable state among LibFS processes via leases. Our filesystem also provides near-instantaneous application fail-over onto a hot replica that mirrors an application local NVM.
 
-Assise has been tested on both Fedora 27 & Ubuntu 16.04 with Linux kernel 4.8.12 and gcc
-version 5.4.0.
+Our [OSDI paper](https://wreda.github.io/papers/assise-osdi20.pdf) describes our system in detail.
+
+To cite us, you can use the following BibTex entry:
+```
+@inproceedings {assise,
+title = {Assise: Performance and Availability via Client-local {NVM} in a Distributed File System},
+booktitle = {14th {USENIX} Symposium on Operating Systems Design and Implementation ({OSDI} 20)},
+year = {2020},
+url = {https://www.usenix.org/conference/osdi20/presentation/anderson},
+publisher = {{USENIX} Association},
+month = nov,
+}
+```
 
 ## System Requirements ##
 
