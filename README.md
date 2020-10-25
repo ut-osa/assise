@@ -221,3 +221,11 @@ This is a known problem with libsyscall and libc v2.30-1 (see: [link](https://gi
 **C- LibFS exits with ''Unable to connect [error code: 111]''**
 
 This indicates that KernFS is unreachable. Please make sure that KernFS is running and that its ports are not blocked by a firewall.
+
+## Acknowledgements
+
+This work is supported in part by the European Commission (EACEA) (FPA 2012-0030), ERC grant 770889, NSF grant CNS-1900457, and the Texas Systems Research Consortium. This work is also supported by the National Research Foundation of Korea (NRF) grant funded by the Korea government (MSIT) (2020R1C1C1014940). We thank Intel for access to the evaluation testbed.
+
+## Contact
+
+You can reach us at `assise@cs.utexas.edu` if you have any questions.
