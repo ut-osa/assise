@@ -138,8 +138,8 @@ static struct peer_id hot_replicas[g_n_hot_rep] = {
  { .ip = "172.17.15.4", .role = HOT_REPLICA, .type = KERNFS_PEER},
 };
 ```
-
-**Note:** To run Assise as a local filesystem, set ‘g_n_hot_rep’ to 1 and the address of KernFS to your localhost IP.
+### Running as a local filesystem ###
+Assise can be configured to run locally. To do so, set ‘g_n_hot_rep’ to 1 and the address of KernFS to your localhost IP. In these settings, Assise behaves similarly to the local filesystem [Strata](https://github.com/ut-osa/strata) (which we use as a building block in our project).
 
 ## Dependencies ##
 
@@ -211,15 +211,17 @@ For more advanced configurations, we describe additional parameters.
 ## Troubleshooting ##
 
 
-**A- Running mkfs.sh fails with ''mlfs_assert(file_size_blks > log_size_blks)''**
+**mkfs.sh fails with ''mlfs_assert(file_size_blks > log_size_blks)''**
 
 This indicates that the NVM device size defined during [step 2](#storage-configuration) is lower than the total log sizes. Either increase dev_size[g_log_dev] or reduce g_log_size.
 
-**B- LibFS exits with ''not enough space for patching around syscal libsyscall_intercept error''**
+##
+**LibFS exits with ''not enough space for patching around syscal libsyscall_intercept error''**
 
 This is a known problem with libsyscall and libc v2.30-1 (see: [link](https://github.com/pmem/syscall_intercept/issues/97)). To workaround this problem, please downgrade libc to v2.29-4 or below.
 
-**C- LibFS exits with ''Unable to connect [error code: 111]''**
+##
+**LibFS exits with ''Unable to connect [error code: 111]''**
 
 This indicates that KernFS is unreachable. Please make sure that KernFS is running and that its ports are not blocked by a firewall.
 
