@@ -224,6 +224,7 @@ This is a known problem with libsyscall and libc v2.30-1 (see: [link](https://gi
 **LibFS exits with ''Unable to connect [error code: 111]''**
 
 This indicates that KernFS is unreachable. Please make sure that KernFS is running and that its ports are not blocked by a firewall.
+##
 
 ## License
 This software is provided under the terms of the [GNU General Public License 2](https://www.gnu.org/licenses/gpl-2.0.html).
