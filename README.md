@@ -152,7 +152,7 @@ This script installs dependent packages and downloads/builds varoius libraries -
 
 For non-Ubuntu systems, you may also need to manually install the following required packages:
 ~~~
-build-essential make pkg-config autoconf libnuma-dev libaio1 libaio-dev uuid-dev librdmacm-dev ndctl numactl libncurses-dev libssl-dev libelf-dev rsync
+build-essential make pkg-config autoconf cmake gcc libcapstone-dev libudev-dev libnl-3-dev libnl-route-3-dev ninja-build pkg-config valgrind libnuma-dev libaio1 libaio-dev uuid-dev librdmacm-dev numactl ndctl libncurses-dev libssl-dev libelf-dev rsync libndctl-dev libdaxctl-dev
 ~~~
 
 **Optional**
