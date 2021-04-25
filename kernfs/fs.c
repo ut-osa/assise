@@ -1675,6 +1675,8 @@ static void handle_digest_request(void *arg)
 	// update peer digesting state
 	set_peer_digesting(g_sync_ctx[log_id]->peer);
 
+	g_sync_ctx[log_id]->peer->n_digest_req = digest_count;
+
 	//if(log_id) {
 	if(log_id && requester_kernfs != g_self_id) {
 		// not the last request in the chain; forward to next kernfs
@@ -1740,7 +1742,7 @@ static void handle_digest_request(void *arg)
 			wait_on_peer_digesting(g_sync_ctx[log_id]->peer);
 		}
 		else {
-			update_peer_digest_state(g_sync_ctx[g_rpc_socks[sock_fd]->peer->id]->peer, digest_blkno, digest_count, rotated);
+			update_peer_digest_state(g_sync_ctx[log_id]->peer, digest_blkno, digest_count, rotated);
 		}
 		mlfs_info("digest response to Peer with ID = %d\n", log_id);
 		rpc_remote_digest_response(digest_arg->sock_fd, log_id, dev_id,
@@ -2203,11 +2205,10 @@ void signal_callback(struct app_context *msg)
 	// handles 4 message types (bootstrap, log, digest, lease)
 	if(msg->data) {
 		sscanf(msg->data, "|%s |", cmd_hdr);
-		mlfs_info("received rpc with body: %s on sockfd %d\n", msg->data, msg->sockfd);
+		mlfs_rpc("peer recv: %s\n", msg->data);
 	}
 	else {
 		cmd_hdr[0] = 'i';
-		mlfs_info("received imm with id %u on sockfd %d\n", msg->id, msg->sockfd);
 	}
 
 	// digest request
@@ -2289,15 +2290,15 @@ void signal_callback(struct app_context *msg)
 #endif
 	else if(cmd_hdr[0] == 'i') { //immediate completions are replication notifications
 		addr_t n_log_blk;
-		int node_id, ack, steps, persist;
+		int node_id, rotated, steps, ack;
 		uint16_t seqn;
-		decode_rsync_metadata(msg->id, &seqn, &n_log_blk, &steps, &node_id, &ack, &persist);
+		decode_rsync_metadata(msg->id, &seqn, &n_log_blk, &steps, &node_id, &rotated, &ack);
 
-		mlfs_info("received log data from replica %d | n_log_blk: %lu | steps: %u | ack_required: %s | persist: %s\n",
-				node_id, n_log_blk, steps, ack?"yes":"no", persist?"yes":"no");	
+		mlfs_rpc("peer recv: rsync from libfs-%d | n_log_blk: %lu | steps: %u | rotated: %s | ack: %s\n",
+				node_id, n_log_blk, steps, rotated?"yes":"no", ack?"yes":"no");	
 
 		//FIXME: this currently updates nr of loghdrs incorrectly (assumes it's just 1)
-		update_peer_sync_state(g_sync_ctx[node_id]->peer, n_log_blk);
+		update_peer_sync_state(g_sync_ctx[node_id]->peer, n_log_blk, rotated);
 
 		//replicate asynchronously to the next node in the chain
 		// As a latency-hiding optimization, we perform this before persisting
@@ -2310,14 +2311,12 @@ void signal_callback(struct app_context *msg)
 			mlfs_do_rsync_forward(node_id, msg->id);
 	
 #if 0
-		if(persist) {
-			//FIXME: pass the correct dev id
-			persist_replicated_logs(1, n_log_blk);
-		}
+		//FIXME: pass the correct dev id
+		persist_replicated_logs(1, n_log_blk);
 #endif
 
 		// last kernfs in the chain; respond to peer
-		if(ack || last_in_chain) {
+		if(last_in_chain && ack) {
 			mlfs_info("last_in_chain -> send replication response to peer %d on sockfd %u\n",
 					node_id, g_peers[node_id]->sockfd[SOCK_IO]);
 			rpc_send_ack(g_peers[node_id]->sockfd[SOCK_IO], seqn);
@@ -2384,7 +2383,6 @@ void signal_callback(struct app_context *msg)
 		mlfs_assert(g_self_id == 0);
 		uint32_t pid;
 		
-		printf("peer recv: %s\n", msg->data);
 		sscanf(msg->data, "|%s |%u", cmd_hdr, &pid);
 
 		// libfs bootstrap calls are forwarded to all other KernFS instances
@@ -2402,8 +2400,8 @@ void signal_callback(struct app_context *msg)
 		uint32_t pid;
 		char ip[NI_MAXHOST];
 		
-		printf("peer recv: %s\n", msg->data);
 		sscanf(msg->data, "|%s |%d|%u|%s", cmd_hdr, &id, &pid, ip);
+
 		struct peer_id *peer = _find_peer(ip, pid);
 		mlfs_assert(peer);
 		peer->id = id;
@@ -2658,12 +2656,7 @@ void cache_init(uint8_t dev)
 	pthread_spin_init(&dcache_spinlock, PTHREAD_PROCESS_SHARED);
 
 #if MLFS_LEASE
-#ifndef LEASE_OPT
 	lease_table = SharedTable_mock();
-#else
-    	lease_table = SharedTable_create("/lease", 1048576000);
-#endif
-
 #endif
 }
 

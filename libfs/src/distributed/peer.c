@@ -251,7 +251,7 @@ void register_peer_log(struct peer_id *peer, int find_id)
 
 	//read_log_superblock(peer->id, (struct log_superblock *)log_sb);
 
-	addr_t start_blk = disk_sb[g_log_dev + 1].log_start + idx * g_log_size + 1;
+	addr_t start_blk = disk_sb[g_log_dev].log_start + idx * g_log_size + 1;
 	log_sb->start_digest = start_blk;
 	log_sb->start_persist = start_blk;
 
@@ -263,10 +263,12 @@ void register_peer_log(struct peer_id *peer, int find_id)
 	peer->log_sb = log_sb;
 
 	//NOTE: for now, don't register logs for kernfs peers
-	if(peer->type != KERNFS_PEER) {
+	if(peer->type != KERNFS_PEER) { 
 		struct peer_id *next_peer = g_kernfs_peers[(g_self_id + 1) % g_n_nodes];
-		init_replication(idx, next_peer, start_blk, start_blk + g_log_size,
-				((uintptr_t) g_bdev[g_log_dev]->map_base_addr), &log_sb->end);
+		uintptr_t base_addr =  0;
+		if(g_n_nodes > 1)
+			base_addr = mr_local_addr(next_peer->sockfd[SOCK_IO], MR_NVM_LOG);
+		init_replication(idx, next_peer, start_blk, start_blk + g_log_size, base_addr, &log_sb->end);
 	}
 	unlock_peer_access();
 }

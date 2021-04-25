@@ -29,47 +29,66 @@ int get_dirent(struct inode *dir_inode, struct mlfs_dirent *buf, offset_t offset
 	return readi(dir_inode, &reply, offset, sizeof(struct mlfs_dirent), NULL);
 }
 
+// Lookup an inode by name and return offset of its directory entry
+// Note: dir_inode should be locked by calling ilock() before using this function
 struct inode *dir_lookup(struct inode *dir_inode, char *name, offset_t *poff)
 {
 	struct mlfs_dirent de;
 	struct inode *ip = NULL;
+	int n_de_cache = 0;
 	offset_t off;
+
+	//pthread_rwlock_wrlock(g_debug_rwlock);
 
 	ip = de_cache_find(dir_inode, name, poff);
 
-	if (ip)
+	if (ip) {
+		//pthread_rwlock_unlock(g_debug_rwlock);
 		return ip;
+	}
 
 	mlfs_debug("dir_lookup: de_cache miss for dir %u, name %s\n", dir_inode->inum, name);
 
-	if ((dir_inode->n_de_cache_entry + 2) * sizeof(struct mlfs_dirent) == dir_inode->size) {
+	n_de_cache = dir_inode->n_de_cache_entry + 2;
+	if (n_de_cache * sizeof(struct mlfs_dirent) == dir_inode->size) {
 		mlfs_debug("%s\n", "not found w/ full de cache - skipping iteration");
+		//pthread_rwlock_unlock(g_debug_rwlock);
 		return NULL;
 	}
 
+	mlfs_debug("dir_lookup: starting search for name %s (dirs: cached %d total %ld)\n",
+			name, n_de_cache, dir_inode->size / sizeof(struct mlfs_dirent));
+
+
 	// iterate through file's dirent until finding name match
-	for (off = 0; off < dir_inode->size; off += sizeof(struct mlfs_dirent)) {
+	for (off = n_de_cache * sizeof(struct mlfs_dirent); off < dir_inode->size; off += sizeof(struct mlfs_dirent)) {
+
 		if (get_dirent(dir_inode, &de, off) != sizeof(struct mlfs_dirent))
 			break;
 
-#ifdef MLFS_DEBUG
-		if (strstr(de.name, "enron") != NULL) {
-			mlfs_debug("[DEBUG] name %s de.name %s match = %s\n", name, de.name, !namecmp(name, de.name)?"YES":"NO");
-		}
-#endif
+		ip = icache_find(de.inum);
 
-		if (!namecmp(name, de.name)) {
-			*poff = off;
+		if(!ip) {
 #if MLFS_NAMESPACES
 			ip = iget(de.inum | (dir_inode->inum & g_namespace_mask));	
 #else
 			ip = iget(de.inum);
-#endif			
+#endif
+
+		}
+
+		// add entry to cache
+		de_cache_add(dir_inode, de.name, ip, off);
+
+		if (!namecmp(name, de.name)) {
+			//pthread_rwlock_unlock(g_debug_rwlock);
+			*poff = off;
 			return ip;
 		}
 	}
 
-	mlfs_info("dir_lookup: did not find %s in dir %u\n", name, dir_inode->inum);
+	//pthread_rwlock_unlock(g_debug_rwlock);
+	mlfs_debug("dir_lookup: did not find %s in dir %u\n", name, dir_inode->inum);
 	return NULL;
 }
 
@@ -125,9 +144,12 @@ struct mlfs_dirent *dir_change_entry(struct inode *dir_inode, char *oldname, cha
 	struct mlfs_dirent *new_de;
 	offset_t de_off;
 
+	//ilock(dir_inode);
 	ip = dir_lookup(dir_inode, oldname, &de_off);
-	if (!ip) 
+	if (!ip) {
+		//iunlock(dir_inode);
 		return NULL;
+	}
 
 	de_cache_del(dir_inode, oldname);
 
@@ -143,6 +165,7 @@ struct mlfs_dirent *dir_change_entry(struct inode *dir_inode, char *oldname, cha
 
 	de_cache_add(dir_inode, newname, ip, de_off);
 
+	//iunlock(dir_inode);
 	iput(ip);
 	return new_de;
 }
@@ -154,8 +177,10 @@ struct mlfs_dirent *dir_remove_entry(struct inode *dir_inode, char *name, struct
 	offset_t last_off;
 	offset_t de_off;
 
+	//ilock(dir_inode);
 	ip = dir_lookup(dir_inode, name, &de_off);
 	if (!ip) {
+		//iunlock(dir_inode);
 		*found = NULL;
 		return NULL;
 	}
@@ -190,6 +215,7 @@ struct mlfs_dirent *dir_remove_entry(struct inode *dir_inode, char *name, struct
 	//loghdr_meta = get_loghdr_meta();
 	//mark_lease_revocable(dir_inode->inum, loghdr_meta->hdr_blkno);
 #endif
+	//iunlock(dir_inode);
 
 	return last;
 }

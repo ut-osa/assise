@@ -18,7 +18,7 @@ extern "C" {
 #endif
 extern int log_fd;
 
-//#define MLFS_PRINTF
+#define MLFS_PRINTF
 
 #ifdef MLFS_LOG
 #define mlfs_log(fmt, ...) \
@@ -39,6 +39,7 @@ extern int log_fd;
 #ifdef MLFS_DEBUG
 #define MLFS_INFO
 #define MLFS_POSIX
+#define MLFS_RPC
 #define mlfs_debug(fmt, ...) \
 	do { \
 		fprintf(stdout, "[tid:%lu][%s():%d] " fmt,  \
@@ -66,6 +67,16 @@ extern int log_fd;
 	} while (0)
 #else
 #define mlfs_posix(...)
+#endif
+
+#ifdef MLFS_RPC
+#define mlfs_rpc(fmt, ...) \
+	do { \
+		fprintf(stdout, "[tid:%lu][%s():%d] " fmt,  \
+				get_tid(), __func__, __LINE__, __VA_ARGS__); \
+	} while (0)
+#else
+#define mlfs_rpc(...)
 #endif
 
 #ifdef MLFS_PRINTF

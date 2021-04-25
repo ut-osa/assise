@@ -210,14 +210,11 @@ int shim_do_pwrite64(int fd, void *buf, size_t count, loff_t off, size_t* result
   size_t ret;
 
   if (check_mlfs_fd(fd)) {
-    /*
     ret = mlfs_posix_pwrite64(get_mlfs_fd(fd), buf, count, off);
     syscall_trace(__func__, ret, 4, fd, buf, count, off);
 
     *result = ret;
-    */
-    printf("%s: does not support yet\n", __func__);
-    exit(-1);
+    return 0;
   } else {
     return 1;
   }

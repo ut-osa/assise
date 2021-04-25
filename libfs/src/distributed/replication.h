@@ -10,7 +10,7 @@
 #include "ds/stdatomic.h"
 #include "agent.h"
 
-#define N_RSYNC_THREADS 5
+#define N_RSYNC_THREADS 2
 
 #ifdef KERNFS
 extern struct replication_context *g_sync_ctx[g_n_max_libfs];
@@ -54,22 +54,28 @@ typedef struct peer_metadata {
 	//pthread_t is unsigned long
 	unsigned long replication_thread_id;
 
-	// # of log block groups to digest at remote (used for convenience/sanity; can be replaced by n_used_blk)
+	// # of log headers to digest at remote (used for convenience/sanity; can be replaced by n_used_blk)
 	atomic_uint n_digest;
+
+	// # of log headers requested for digestion in the last request
+	uint32_t n_digest_req;
 
 	// # of log headers that are pending transmission or inflight
 	atomic_uint n_pending;
 
-	// # of log block groups reserved at remote (used for convenience/sanity; can be replaced by n_used_blk)
+	// # of log headers reserved at remote (used for convenience/sanity; can be replaced by n_used_blk)
 	atomic_uint n_used;
 
-	// # of blks reserved at remote log
+	// # of blocks reserved at remote log
 	atomic_ulong n_used_blk;
 
 	//1 if peer is currently digesting; 0 otherwise
 	int digesting;
 
-	// # of unsynced log block groups (used for convenience/sanity; can be replaced by n_unsync_blk)
+	//1 if peer is currently syncing data (one flag per each replication thread)
+	int syncing[N_RSYNC_THREADS+1]; 
+
+	// # of unsynced log headers (used for convenience/sanity; can be replaced by n_unsync_blk)
 	atomic_uint n_unsync;
 
 	// # of unsynced log blocks
@@ -106,6 +112,7 @@ struct replication_context {
 struct rdma_meta_entry {
 	int local_mr;
 	int remote_mr;
+	int rotated;
 	rdma_meta_t *meta;
 	struct list_head head;
 };
@@ -135,6 +142,7 @@ typedef struct sync_meta {
 	addr_t n_unsync_blk; //# of unsynced log blks
 	addr_t n_tosync_blk; //# of log blks to sync (after coalescing)
 	uint32_t n_digest;
+	int rotated; //whether or not log has wrapped around during session
 	struct sync_list *intervals;
 	struct list_head rdma_entries;
 
@@ -172,23 +180,49 @@ static inline void clear_peer_digesting(peer_meta_t *peer)
 	//}
 }
 
+static inline void set_peer_syncing(peer_meta_t *peer, int seqn)
+{
+	mlfs_printf("set syncing for peer %d seqn %d\n", peer->id, seqn);
+	while (1) {
+		//if (!xchg_8(&g_fs_log->digesting, 1)) 
+		if (!cmpxchg(&peer->syncing[seqn], 0, 1)) 
+			return;
+
+		while (peer->syncing[seqn]) 
+			cpu_relax();
+	}
+}
+
+static inline void clear_peer_syncing(peer_meta_t *peer, int seqn)
+{
+	mlfs_printf("clear syncing for peer %d seqn %d\n", peer->id, seqn);
+	//while (1) {
+		//if (!xchg_8(&g_fs_log->digesting, 1)) 
+		if (cmpxchg(&peer->syncing[seqn], 1, 0))
+			return;
+
+		//while (peer->digesting) 
+		//	cpu_relax();
+	//}
+}
+
 void init_replication(int id, struct peer_id *peer, addr_t begin, addr_t size,
 		addr_t addr, atomic_ulong *end);
 int make_replication_request_async(uint32_t n_blk);
 int make_replication_request_sync(peer_meta_t *peer);
 int mlfs_do_rsync_forward(int node_id, uint32_t imm);
 uint32_t create_rsync(int id, struct list_head **rdma_entries, uint32_t n_blk, int force_digest);
-void update_peer_sync_state(peer_meta_t *peer, uint16_t nr_log_blocks);
+void update_peer_sync_state(peer_meta_t *peer, uint16_t nr_log_blocks, int rotated);
 void update_peer_digest_state(peer_meta_t *peer, addr_t start_digest, int n_digested, int rotated);
 void wait_on_peer_digesting(peer_meta_t *peer);
-void wait_on_peer_replicating(peer_meta_t *peer);
+void wait_on_peer_replicating(peer_meta_t *peer, int seqn);
 void wait_till_digest_checkpoint(peer_meta_t *peer, int version, addr_t block_nr);
 
 uint32_t addr_to_logblk(int id, addr_t addr);
-uint32_t generate_rsync_metadata(int id, uint16_t seq_n, addr_t size, int solicit_ack);
+uint32_t generate_rsync_metadata(int id, uint16_t seq_n, addr_t size, int rotated, int ack);
 uint32_t next_rsync_metadata(uint32_t meta);
 int decode_rsync_metadata(uint32_t meta, uint16_t *seq_n, addr_t *n_log_blk, int *steps,
-		int *requester_id, int *sync, int *persist);
+		int *requester_id, int *sync, int *ack);
 peer_meta_t* get_next_peer();
 static int start_rsync_session(peer_meta_t *peer, uint32_t n_blk);
 void end_rsync_session(peer_meta_t *peer);

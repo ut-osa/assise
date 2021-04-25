@@ -129,8 +129,6 @@ static inline mlfs_lease_t *lcache_alloc_add(uint32_t inum)
 {
 	mlfs_lease_t *ls;
 
-#ifndef LEASE_OPT
-
 #ifdef __cplusplus
 	ls = static_cast<mlfs_lease_t *>(mlfs_zalloc(sizeof(mlfs_lease_t)));
 #else
@@ -147,28 +145,6 @@ static inline mlfs_lease_t *lcache_alloc_add(uint32_t inum)
 	HASH_ADD(hash_handle, lease_table->guts->hash, inum,
 	 		sizeof(uint32_t), ls);
 
-#else
-#undef uthash_malloc
-#define uthash_malloc(sz) SharedTable_malloc(lease_table, sz)
-	ls = SharedTable_malloc(lease_table, sizeof(mlfs_lease_t));
-
-	pthread_spin_init(&ls->mutex, PTHREAD_PROCESS_SHARED);
-	//pthread_mutexattr_t att;
-	//pthread_mutexattr_init(&att);
-	//pthread_mutexattr_setpshared(&att, PTHREAD_PROCESS_SHARED);
-	//pthread_mutex_init(&ls->mutex, &att);
-
-	if (!ls)
-		panic("Fail to allocate lease\n");
-
-	ls->inum = inum;
-
-	HASH_ADD(hash_handle, lease_table->guts->hash, inum,
-	 		sizeof(uint32_t), ls);
-#undef uthash_malloc
-
-#endif
-
 	return ls;
 }
 
@@ -178,17 +154,8 @@ static inline mlfs_lease_t *lcache_add(mlfs_lease_t *ls)
 
 	pthread_spin_lock(&lease_table->guts->mutex);
 
-#ifndef LEASE_OPT	
 	HASH_ADD(hash_handle, lease_table->guts->hash, inum,
 	 		sizeof(uint32_t), ls);
-
-#else
-#undef uthash_malloc
-#define uthash_malloc(sz) SharedTable_malloc(lease_table, sz)
-	HASH_ADD(hash_handle, lease_table->guts->hash, inum,
-	 		sizeof(uint32_t), ls);
-#undef uthash_malloc
-#endif
 
 	pthread_spin_unlock(&lease_table->guts->mutex);
 
@@ -197,19 +164,11 @@ static inline mlfs_lease_t *lcache_add(mlfs_lease_t *ls)
 
 static inline int lcache_del(mlfs_lease_t *ls)
 {
-
 	pthread_spin_lock(&lease_table->guts->mutex);
-#ifndef LEASE_OPT
+
 	HASH_DELETE(hash_handle, lease_table->guts->hash, ls);
 	free(ls);
-#else
-#undef uthash_malloc
-#define uthash_malloc(sz) SharedTable_malloc(lease_table, sz)
-	HASH_DELETE(hash_handle, lease_table->guts->hash, ls);
 
-	SharedTable_free(lease_table, ls);
-#undef uthash_malloc
-#endif
 	pthread_spin_unlock(&lease_table->guts->mutex);
 	return 0;
 }
@@ -374,9 +333,8 @@ int revoke_lease(int sockfd, uint32_t seq_n, uint32_t inum)
 	if (!ls)
 		panic("failed to allocate lease\n");
 
-#ifndef LEASE_OPT
 	pthread_spin_lock(&ls->mutex); //never calls this if we're using shared locks (causes a deadlock)
-#endif
+
 	if(ls->hid != g_self_id)
 		panic("kernfs trying to revoke an unowned lease\n");
 
@@ -401,9 +359,7 @@ int revoke_lease(int sockfd, uint32_t seq_n, uint32_t inum)
 	ls->state = LEASE_FREE;
 	ls->hid = ls->mid;
 
-#ifndef LEASE_OPT
 	pthread_spin_unlock(&ls->mutex);
-#endif
 
 	mlfs_printf("lease revoked for inum %u\n", inum);
 }
@@ -445,30 +401,6 @@ int mark_lease_revocable(uint32_t inum)
 		start_tsc = asm_rdtscp();
 
 	if(ls->holders == 1) {
-		//ls->state = LEASE_FREE;
-
-#ifdef LEASE_OPT
-		if(ls->mid == g_kernfs_id) {
-
-			//gettimeofday(&start_time, NULL);
-
-			// FIXME: this currently offers no guarantees that any subsequent holder will see up-to-date inode state
-			while(make_digest_request_async(100) == -EBUSY)
-				cpu_relax();
-
-			//gettimeofday(&end_time, NULL);
-			//revoke_sec += ((end_time.tv_sec  - start_time.tv_sec) * 1000000u + end_time.tv_usec - start_time.tv_usec) / 1.e6;
-
-			//mlfs_printf("Elapsed time (s): %lf\n", sec);
-
-			modify_lease_state(g_self_id, ls->inum, LEASE_FREE, ls->lversion, ls->lblock);
-
-			mlfs_info("%s", "[L] Giving up lease. asynchronous digest!\n");
-		}
-		else
-#endif
-
-		{
 #ifndef LAZY_SURRENDER
 			rpc_lease_change(ls->mid, g_self_id, ls->inum, LEASE_FREE, ls->lversion, ls->lblock, 0);
 			ls->state = LEASE_FREE;		
@@ -482,7 +414,6 @@ int mark_lease_revocable(uint32_t inum)
 
 #endif
 			ls->holders--;
-		}
 	}
 	else
 		ls->holders--;
@@ -523,7 +454,6 @@ int acquire_lease(uint32_t inum, int type, char *path)
 retry:
 
 	if(type > ls->state || ls->hid != g_self_id) {
-#ifndef LEASE_OPT
 		rpc_lease_change(ls->mid, g_self_id, ls->inum, type, 0, 0, 1);
 
 		// received invalid response
@@ -533,15 +463,6 @@ retry:
 		}
 
 		ls->holders++;
-#else
-		if(ls->mid == g_kernfs_id)
-			modify_lease_state(g_self_id, ls->inum, type, 0, 0);
-		else {
-			rpc_lease_change(ls->mid, g_self_id, ls->inum, type, 0, 0, 1);
-			ls->holders++;
-		}
-#endif
-
 		// FIXME: remove this; inode cache should be cleared whenever leases
 		// are revoked
 

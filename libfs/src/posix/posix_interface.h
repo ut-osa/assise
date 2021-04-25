@@ -14,6 +14,7 @@ int mlfs_posix_creat(char *path, uint16_t mode);
 int mlfs_posix_read(int fd, uint8_t *buf, int count);
 int mlfs_posix_pread64(int fd, uint8_t *buf, int count, loff_t off);
 int mlfs_posix_write(int fd, uint8_t *buf, size_t count);
+int mlfs_posix_pwrite64(int fd, uint8_t *buf, size_t count, loff_t off);
 int mlfs_posix_lseek(int fd, int64_t offset, int origin);
 int mlfs_posix_mkdir(char *path, unsigned int mode);
 int mlfs_posix_rmdir(char *path);

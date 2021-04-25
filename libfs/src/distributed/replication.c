@@ -20,7 +20,6 @@ int log_idx = 0;
 #ifdef KERNFS
 struct replication_context *g_sync_ctx[g_n_max_libfs];
 #else
-//TODO: change size to accommodate multiple logs
 struct replication_context *g_sync_ctx[g_n_nodes];
 #endif
 
@@ -122,48 +121,48 @@ uint32_t addr_to_logblk(int id, addr_t addr)
 
 uint32_t next_rsync_metadata(uint32_t meta)
 {
-	uint32_t remaining = (uint8_t) ((meta & 0x000000C0uL) >> 6) - 1;
+	uint32_t remaining = (uint8_t) ((meta & 0x00000300uL) >> 8) - 1;
 	assert(remaining >= 0);
-	return (remaining << 6) | (meta & 0xFFFFFF3FuL);
+	return (remaining << 8) | (meta & 0xFFFFFCFFuL);
 	
 }
 
-uint32_t generate_rsync_metadata(int peer_id, uint16_t seqn, addr_t size, int solicit_ack)
+uint32_t generate_rsync_metadata(int peer_id, uint16_t seqn, addr_t size, int rotated, int ack)
 {
-	uint16_t block_nr = ((ALIGN(size, g_block_size_bytes)) >> g_block_size_shift);
-	mlfs_debug("generating rsync metadata: peer_id %d, seqn %u block_nr %u solicit_ack %u persist %u\n",
-			peer_id, seqn, block_nr, solicit_ack, g_enable_rpersist);
-	return (((uint32_t) seqn << 20) | ((uint32_t) block_nr << 8) | ((uint8_t) (g_rsync_rf - 1) << 6)
-			| ((uint16_t) peer_id << 2) | ((uint8_t) solicit_ack << 1) | ((uint8_t) g_enable_rpersist)); 
+	uint32_t block_nr = ((ALIGN(size, g_block_size_bytes)) >> g_block_size_shift);
+	mlfs_rpc("generating rsync metadata: peer_id %d, seqn %u block_nr %u rotated %u ack %u\n",
+			peer_id, seqn, block_nr, rotated, ack);
+	return (((uint32_t) seqn << 30) | ((uint32_t) block_nr << 10) | ((uint8_t) (g_rsync_rf - 1) << 8)
+			| ((uint16_t) peer_id << 2) | ((uint8_t) rotated << 1) | ((uint8_t) ack));
 }
 
-int decode_rsync_metadata(uint32_t meta, uint16_t *seq_n, addr_t *n_log_blk, int *steps, int *requester_id, int *sync, int *persist)
+int decode_rsync_metadata(uint32_t meta, uint16_t *seq_n, addr_t *n_log_blk, int *steps, int *requester_id, int *rotated, int *ack)
 {
 	if(seq_n)
-		*seq_n = (uint16_t) ((meta & 0xFFF00000uL) >> 20);
+		*seq_n = (uint16_t) ((meta & 0xC0000000uL) >> 30);
 
 	if(n_log_blk)
-		*n_log_blk = (addr_t) ((meta & 0x000FFF00uL) >> 8);
+		*n_log_blk = (addr_t) ((meta & 0x3FFFFC00uL) >> 10);
 
 	if(steps)
-		*steps = (uint8_t) ((meta & 0x000000C0uL) >> 6);
+		*steps = (uint8_t) ((meta & 0x00000300uL) >> 8);
 
 	if(requester_id)
-		*requester_id = (uint8_t) ((meta & 0x0000003CuL) >> 2);
+		*requester_id = (uint8_t) ((meta & 0x000000FCuL) >> 2);
 
-	if(sync)
-       		*sync = (int) ((meta & 2) >> 1);
+	if(rotated)
+		*rotated = (int) ((meta & 2) >> 1);
 
-	if(persist)
-		*persist = (int) (meta & 1);
+	if(ack)
+		*ack = (int) (meta & 1);
 
-	mlfs_debug("decoding rsync metadata: peer_id %u seqn %u block_nr %lu solicit_ack %u persist %u\n",
-			*requester_id, *seq_n, *n_log_blk, *sync, *persist);
+	mlfs_printf("decoding rsync metadata: peer_id %u seqn %u block_nr %lu rotated %u ack %u\n",
+			*requester_id, *seq_n, *n_log_blk, *rotated, *ack);
 
 	return 0;
 }
 
-void update_peer_sync_state(peer_meta_t *peer, uint16_t nr_log_blocks)
+void update_peer_sync_state(peer_meta_t *peer, uint16_t nr_log_blocks, int rotated)
 {
 	if(!peer)
 		return;
@@ -175,15 +174,35 @@ void update_peer_sync_state(peer_meta_t *peer, uint16_t nr_log_blocks)
 	pthread_mutex_lock(peer->shared_rsync_n_lock);
 	atomic_fetch_add(&peer->n_unsync_blk, nr_log_blocks);
 	atomic_fetch_add(&peer->n_unsync, 1);
+
+	if(rotated) {
+		peer->avail_version++;
+		peer->remote_end = peer->remote_start - 1;
+		peer->local_start = g_sync_ctx[peer->id]->begin;
+		peer->remote_start = g_sync_ctx[peer->id]->begin;
+		mlfs_info("-- remote log tail is rotated: start %lu end %lu\n",
+				peer->remote_start, peer->remote_end);
+	}
+
 	pthread_mutex_unlock(peer->shared_rsync_n_lock);
 
-	//mlfs_printf("Updating logblks to %u\n", atomic_load(&peer->n_unsync_blk));
+	//mlfs_printf("update peer %d sync state: n_unsync_blk %lu\n", peer->id, atomic_load(&peer->n_unsync_blk));
 }
 
 void update_peer_digest_state(peer_meta_t *peer, addr_t start_digest, int n_digested, int rotated)
 {
-	if(!peer)
-		return;
+	if(!peer) {
+		panic("Invalid peer for digest response\n");
+	}
+
+	if (peer->n_digest_req == n_digested)  {
+		mlfs_info("%s", "digest is done correctly\n");
+		mlfs_info("%s", "-----------------------------------\n");
+	} else {
+		mlfs_printf("[D] digest is done insufficiently: req %u | done %u\n",
+				peer->n_digest_req, n_digested);
+		panic("Digest was incorrect!\n");
+	}
 
 	//printf("%s\n", "received digestion notification from slave");
 	//pthread_mutex_lock(peer->shared_rsync_addr_lock);
@@ -278,7 +297,7 @@ void wait_till_digest_checkpoint(peer_meta_t *peer, int version, addr_t block_nr
 
 }
 
-void wait_on_peer_replicating(peer_meta_t *peer)
+void wait_on_peer_replicating(peer_meta_t *peer, int seqn)
 {
 
 	if(!peer)
@@ -291,7 +310,7 @@ void wait_on_peer_replicating(peer_meta_t *peer)
 		tsc_begin = asm_rdtsc();
 	*/
 
-	while(peer->outstanding)
+	while(peer->syncing[seqn])
 		cpu_relax();
 	mlfs_info("%s\n", "ending wait for peer replication");
 
@@ -319,6 +338,8 @@ int mlfs_do_rsync_forward(int node_id, uint32_t imm)
 	uint64_t tsc_begin;
 	uint32_t n_loghdrs;
 
+	pthread_mutex_lock(g_sync_ctx[node_id]->peer->shared_rsync_addr_lock);
+
 	//generate rsync metadata
 	n_loghdrs = create_rsync(node_id, &rdma_entries, 0, 0);
 
@@ -327,8 +348,9 @@ int mlfs_do_rsync_forward(int node_id, uint32_t imm)
 	//--------------------------------------------------------
 
 	//no data to rsync
-	if(n_loghdrs) {
+	if(!n_loghdrs) {
 		mlfs_debug("%s\n", "Ignoring rsync call; slave node is up-to-date");
+		pthread_mutex_unlock(g_sync_ctx[node_id]->peer->shared_rsync_addr_lock);
 		return -1;
 	}
 
@@ -342,10 +364,12 @@ int mlfs_do_rsync_forward(int node_id, uint32_t imm)
 	// generate next imm value
 	uint32_t next_imm = next_rsync_metadata(imm);
 
-	rpc_replicate_log_sync(g_sync_ctx[node_id]->peer, rdma_entries, next_imm);
+	rpc_replicate_log_async(g_sync_ctx[node_id]->peer, rdma_entries, next_imm);
 
 	atomic_fetch_add(&g_sync_ctx[node_id]->peer->n_digest, n_loghdrs);
 	atomic_fetch_sub(&g_sync_ctx[node_id]->peer->n_pending, n_loghdrs);
+
+	pthread_mutex_unlock(g_sync_ctx[node_id]->peer->shared_rsync_addr_lock);
 
 #ifdef LIBFS
 	if (enable_perf_stats)
@@ -401,6 +425,8 @@ int make_replication_request_sync(peer_meta_t *peer)
 	if(g_n_nodes == 1)
 		return -EBUSY;
 
+	pthread_mutex_lock(g_sync_ctx[peer->id]->peer->shared_rsync_addr_lock);
+
 	//generate rsync metadata
 	n_loghdrs = create_rsync(peer->id, &rdma_entries, 0, 0);
 
@@ -411,6 +437,7 @@ int make_replication_request_sync(peer_meta_t *peer)
 	//no data to rsync
 	if(!n_loghdrs) {
 		mlfs_debug("%s\n", "Ignoring rsync call; slave node is up-to-date");
+		pthread_mutex_unlock(g_sync_ctx[peer->id]->peer->shared_rsync_addr_lock);
 		return -1;
 	}
 
@@ -425,6 +452,10 @@ int make_replication_request_sync(peer_meta_t *peer)
 
 	atomic_fetch_add(&g_sync_ctx[peer->id]->peer->n_digest, n_loghdrs);
 	atomic_fetch_sub(&g_sync_ctx[peer->id]->peer->n_pending, n_loghdrs);
+
+	pthread_mutex_unlock(g_sync_ctx[peer->id]->peer->shared_rsync_addr_lock);
+
+	mlfs_rpc("DEBUG sync n_digest %u\n", atomic_load(&g_sync_ctx[peer->id]->peer->n_digest));
 
 #ifdef LIBFS
 	if (enable_perf_stats)
@@ -445,7 +476,7 @@ uint32_t create_rsync(int id, struct list_head **rdma_entries, uint32_t n_blk, i
 	if (enable_perf_stats)
 		tsc_begin = asm_rdtscp();
 
-	pthread_mutex_lock(g_sync_ctx[id]->peer->shared_rsync_addr_lock);
+	//pthread_mutex_lock(g_sync_ctx[id]->peer->shared_rsync_addr_lock);
 
 	//take a snapshot of sync parameters (necessary since rsyncs can be issued concurrently)
 	int ret = start_rsync_session(g_sync_ctx[id]->peer, n_blk);
@@ -483,7 +514,7 @@ uint32_t create_rsync(int id, struct list_head **rdma_entries, uint32_t n_blk, i
 	//nothing to rsync
 	if(ret) {
 		//mlfs_info("nothing to rsync. n_unsync = %u n_threshold = %u\n", session->n_unsync_blk, g_rsync_chunk);
-		pthread_mutex_unlock(g_sync_ctx[session->id]->peer->shared_rsync_addr_lock);
+		//pthread_mutex_unlock(g_sync_ctx[session->id]->peer->shared_rsync_addr_lock);
 		end_rsync_session(g_sync_ctx[session->id]->peer);
 		return 0;
 	}
@@ -514,7 +545,7 @@ uint32_t create_rsync(int id, struct list_head **rdma_entries, uint32_t n_blk, i
 //--------------------[Coalescing]-------------------------
 //---------------------------------------------------------
 
-	pthread_mutex_unlock(g_sync_ctx[id]->peer->shared_rsync_addr_lock);
+	//pthread_mutex_unlock(g_sync_ctx[id]->peer->shared_rsync_addr_lock);
 	
 	struct replay_list *replay_list = (struct replay_list *) mlfs_zalloc(
 			sizeof(struct replay_list));
@@ -603,7 +634,7 @@ uint32_t create_rsync(int id, struct list_head **rdma_entries, uint32_t n_blk, i
 		g_sync_ctx[id]->peer->avail_version++;
 	}
 
-	pthread_mutex_unlock(g_sync_ctx[id]->peer->shared_rsync_addr_lock);
+	//pthread_mutex_unlock(g_sync_ctx[id]->peer->shared_rsync_addr_lock);
 
 #endif
 	assert(session->intervals->count == 0);
@@ -611,7 +642,7 @@ uint32_t create_rsync(int id, struct list_head **rdma_entries, uint32_t n_blk, i
 	*rdma_entries = &session->rdma_entries;
 
 	//mlfs_debug("rsync local |%lu|%u\n", current_local_start, session->n_unsync);
-	mlfs_info("rsync |%lu|%u\n", current_remote_start, session->n_tosync);
+	mlfs_rpc("rsync |%lu|%u\n", current_remote_start, session->n_tosync);
 
 #ifdef LIBFS
 	if (enable_perf_stats) {
@@ -1081,8 +1112,9 @@ static void generate_rsync_msgs(addr_t sync_size, int loop_mode)
 			//before we reset remote_start, calculate remote_end for remote digests
 			session->remote_end = session->remote_start + interval_size - 1;	
 			reset_log_ptr(&session->remote_start);
-			printf("-- remote log tail is rotated: start %lu end %lu\n",
+			mlfs_printf("-- remote log tail is rotated: start %lu end %lu\n",
 					session->remote_start, session->remote_end);
+			session->rotated = 1;
 		}
 		else
 			move_log_ptr(session->id, &session->remote_start, (session->local_start
@@ -1426,6 +1458,11 @@ static void rdma_finalize()
 	rdma_entry->meta->sge_count = session->intervals->count;
 	rdma_entry->meta->next = NULL;
 
+	if(session->rotated) {
+		rdma_entry->rotated = 1;
+		session->rotated = 0;
+	}
+
 	//printf("peer base address = %lu \n", session->peer_base_addr);
 	//printf("remote_start << g_block_size_shift = %lu\n", (session->intervals->remote_start << g_block_size_shift));
 	//printf("rdma_entry->meta->address = %lu \n", rdma_entry->meta->address);
@@ -1554,6 +1591,8 @@ static void replication_worker(void *arg)
 	if(arg)
 		n_blk = *((uint32_t*)arg);
 
+	pthread_mutex_lock(g_sync_ctx[0]->peer->shared_rsync_addr_lock);
+
 	//generate rsync metadata
 	n_loghdrs = create_rsync(0, &rdma_entries, n_blk,  0);
 
@@ -1564,6 +1603,7 @@ static void replication_worker(void *arg)
 	//no data to rsync
 	if(!n_loghdrs) {
 		mlfs_debug("%s\n", "Ignoring rsync call; slave node is up-to-date");
+		pthread_mutex_unlock(g_sync_ctx[0]->peer->shared_rsync_addr_lock);
 		return;
 	}
 
@@ -1576,6 +1616,10 @@ static void replication_worker(void *arg)
 
 	atomic_fetch_add(&g_sync_ctx[0]->peer->n_digest, n_loghdrs);
 	atomic_fetch_sub(&g_sync_ctx[0]->peer->n_pending, n_loghdrs);
+
+	pthread_mutex_unlock(g_sync_ctx[0]->peer->shared_rsync_addr_lock);
+
+	mlfs_rpc("DEBUG sync n_digest %u\n", atomic_load(&g_sync_ctx[0]->peer->n_digest));
 
 	//if (enable_perf_stats)
 	//	g_perf_stats.rdma_write_time_tsc += (asm_rdtscp() - tsc_begin);

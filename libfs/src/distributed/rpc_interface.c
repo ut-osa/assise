@@ -182,7 +182,7 @@ int init_rpc(struct mr_context *regions, int n_regions, char *listen_port, signa
 #endif
 
 	//sleep(4);
-	mlfs_printf("%s\n", "MLFS cluster initialized");
+	printf("%s\n", "MLFS cluster initialized");
 
 		//gettimeofday(&start_time, NULL);
 }
@@ -623,6 +623,9 @@ struct rpc_pending_io * rpc_replicate_log(peer_meta_t *peer, struct list_head *r
 	struct rpc_pending_io *rpc = NULL;
 	uint16_t seqn = 0;
 
+	addr_t n_log_blk = 0;
+	int steps = 0, requester_id = 0, rotated = 0, ack = 0;
+
 	// last peer in the chain sends back an ack
 	struct peer_id *ack_replica = g_kernfs_peers[(g_self_id + g_rsync_rf - 1) % g_rsync_rf];
 	int send_sockfd = peer->info->sockfd[SOCK_IO];
@@ -633,59 +636,45 @@ struct rpc_pending_io * rpc_replicate_log(peer_meta_t *peer, struct list_head *r
 	//if (enable_perf_stats)
 	//	start_tsc_tmp = asm_rdtscp();
 
-	list_for_each_entry_safe(rdma_entry, rdma_tmp, rdma_entries, head) {
-		if(imm)
-			seqn = (uint16_t) decode_rsync_metadata(imm, &seqn, NULL, NULL, NULL, NULL, NULL); 
-		else if(!imm && (g_enable_rpersist || g_rsync_rf > 2)) {
-			//FIXME: seqn is currently bound to 4096 due to imm field size.
-			// store these limits in a variable somewhere.
-			seqn = (uint16_t) (generate_rpc_seqn(g_rpc_socks[ack_replica->sockfd[SOCK_IO]]) % 4095) + 1;
-			imm = generate_rsync_metadata(g_self_id, seqn, rdma_entry->meta->length, 0);
-		}
-		else
-			imm = 0;
+	if(imm)
+		decode_rsync_metadata(imm, &seqn, &n_log_blk, &steps, &requester_id, &rotated, &ack);
+	else {
+		//FIXME: seqn is currently bound to 3 due to imm field size.
+		// store these limits in a variable somewhere.
+		seqn = (uint16_t) (generate_rpc_seqn(g_rpc_socks[ack_replica->sockfd[SOCK_IO]]) % N_RSYNC_THREADS) + 1;
+	}
 
-		mlfs_info("do_replicate dst_ip[%s] type:[%s] remote addr[0x%lx] len[%lu bytes] imm[%u] send_sockfd[%d] rcv_sockfd[%d]\n",
+
+	list_for_each_entry_safe(rdma_entry, rdma_tmp, rdma_entries, head) {
+
+		mlfs_rpc("rsync: dst_ip[%s] type:[%s] remote addr[0x%lx] len[%lu bytes] imm[%u] send_sockfd[%d] rcv_sockfd[%d]\n",
 				peer->info->ip, do_sync?"sync":"async", rdma_entry->meta->addr, rdma_entry->meta->length, imm, send_sockfd,
 				rcv_sockfd);
 
+
+		if(imm)
+			rdma_entry->meta->imm = imm;
+
 		if(list_is_last(&rdma_entry->head, rdma_entries)) {
-			assert(rdma_entry->meta->next == 0); // check that rdma operations are not batched (disabled for now)
-
-			// rsync metadata is encoded in the imm field (necessary for chain replication or enforcing persistence) 
-			if(imm) {
-				rdma_entry->meta->imm = imm;
-				//rdma_entry->meta->imm = addr_to_logblk(rdma_entry->meta->addr + rdma_entry->meta->length);
-
-				IBV_WRAPPER_WRITE_WITH_IMM_ASYNC(send_sockfd, rdma_entry->meta, MR_NVM_LOG, MR_NVM_LOG);
-				//IBV_WRAPPER_READ_SYNC(sockfd, rdma_entry->meta, MR_NVM_LOG, MR_NVM_LOG);
-
-				if(do_sync)
-					MP_AWAIT_RESPONSE(rcv_sockfd, seqn);
-				else {
-					rpc = mlfs_zalloc(sizeof(struct rpc_pending_io));
-					rpc->seq_n = seqn;
-					rpc->type = RPC_PENDING_RESPONSE;
-					rpc->sockfd = rcv_sockfd;
-				}
-			}
-			else {
-				if(do_sync) {
-					IBV_WRAPPER_WRITE_SYNC(send_sockfd, rdma_entry->meta, MR_NVM_LOG, MR_NVM_LOG);
-				}
-				else {
-					uint32_t wr_id = IBV_WRAPPER_WRITE_ASYNC(send_sockfd, rdma_entry->meta, MR_NVM_LOG, MR_NVM_LOG);
-					rpc = mlfs_zalloc(sizeof(struct rpc_pending_io));
-					rpc->seq_n = wr_id;
-					rpc->type = RPC_PENDING_WC;
-					rpc->sockfd = rcv_sockfd;
-				}
+			assert(rdma_entry->meta->next == 0);
+			if(do_sync) {
+				set_peer_syncing(peer, seqn);
+				ack = 1;
 			}
 		}
+
+		if(g_n_nodes > 2 && !imm)
+			rdma_entry->meta->imm = generate_rsync_metadata(g_self_id, seqn, rdma_entry->meta->length, rdma_entry->rotated, ack);
+
+		if(rdma_entry->meta->imm) {
+			IBV_WRAPPER_WRITE_WITH_IMM_ASYNC(send_sockfd, rdma_entry->meta, MR_NVM_LOG, MR_NVM_LOG);
+			if(do_sync && list_is_last(&rdma_entry->head, rdma_entries))
+				wait_on_peer_replicating(peer, seqn);
+		}
 		else {
-			if(imm) {
-				rdma_entry->meta->imm = imm;
-				IBV_WRAPPER_WRITE_WITH_IMM_ASYNC(send_sockfd, rdma_entry->meta, MR_NVM_LOG, MR_NVM_LOG);
+			if(do_sync && list_is_last(&rdma_entry->head, rdma_entries)) {
+				IBV_WRAPPER_WRITE_SYNC(send_sockfd, rdma_entry->meta, MR_NVM_LOG, MR_NVM_LOG);
+				clear_peer_syncing(peer, seqn);
 			}
 			else
 				IBV_WRAPPER_WRITE_ASYNC(send_sockfd, rdma_entry->meta, MR_NVM_LOG, MR_NVM_LOG);
@@ -707,14 +696,14 @@ struct rpc_pending_io * rpc_replicate_log(peer_meta_t *peer, struct list_head *r
 //acknowledge completion of an rpc
 int rpc_send_ack(int sockfd, uint32_t seqn)
 {
-	mlfs_info("trigger ACK response on sock:%d with seqn: %u\n", sockfd, seqn);
 #ifdef KERNFS
 	rdma_meta_t *meta = create_rdma_ack();
-	//responses are sent from specified local memory region to requester's read cache
 	if(seqn) {
 		meta->imm = seqn; //set immediate to sequence number in order for requester to match it (in case of io wait)
 		IBV_WRAPPER_WRITE_WITH_IMM_ASYNC(sockfd, meta, 0, 0);
 	}
+
+	mlfs_rpc("peer send: ack on sock:%d with seqn: %u\n", sockfd, seqn);
 #else
 	struct app_context *msg;
 
@@ -729,10 +718,10 @@ int rpc_send_ack(int sockfd, uint32_t seqn)
 	snprintf(msg->data, RPC_MSG_BYTES, "|ack |%d|", 1);
 	msg->id = seqn; //set immediate to sequence number in order for requester to match it
 
+	mlfs_rpc("peer send: %s\n", msg->data);
 	MP_SEND_MSG_ASYNC(sockfd, buffer_id, 0);
-	return 0;
-
 #endif
+	return 0;
 }
 
 //send digest request asynchronously
@@ -759,6 +748,7 @@ struct rpc_pending_io * rpc_remote_digest_async(int peer_id, peer_meta_t *peer, 
 	}
 
 	set_peer_digesting(peer);
+	peer->n_digest_req = n_digest;
 
 	addr_t digest_blkno = peer->start_digest;
 	addr_t start_blkno = g_sync_ctx[0]->begin;
@@ -779,7 +769,7 @@ struct rpc_pending_io * rpc_remote_digest_async(int peer_id, peer_meta_t *peer, 
 
 	MP_SEND_MSG_ASYNC(sockfd, buffer_id, rpc_wait);
 
-	printf("peer send: %s\n", msg->data);
+	mlfs_rpc("peer send: %s\n", msg->data);
 	mlfs_info("trigger remote digest (async) on sock %d: dev[%d] digest_blkno[%lu] n_digest[%u] end_blkno[%lu] steps[%u]\n",
 			sockfd, log_id, digest_blkno, n_digest, end_blkno, g_rsync_rf-1);
 
@@ -824,10 +814,8 @@ int rpc_remote_digest_sync(int peer_id, peer_meta_t *peer, uint32_t n_digest)
 		//mlfs_info("%s", "[L] remote digest failure: peer is busy\n");
 	}
 
-	peer->digesting = 1;
-
-	// TODO: describe how log devs are computed for remote nodes
-	int dev = abs(peer->info->id - g_self_id) % g_n_nodes;
+	set_peer_digesting(peer);
+	peer->n_digest_req = n_digest;
 
 	addr_t digest_blkno = peer->start_digest;
 	addr_t start_blkno = g_sync_ctx[0]->begin;
@@ -845,7 +833,7 @@ int rpc_remote_digest_sync(int peer_id, peer_meta_t *peer, uint32_t n_digest)
 
 	MP_SEND_MSG_ASYNC(sockfd, buffer_id, 1);
 
-	printf("peer send: %s\n", msg->data);
+	mlfs_rpc("peer send: %s\n", msg->data);
 	mlfs_info("trigger remote digest (sync) on sock %d: dev[%d] digest_blkno[%u] n_digest[%lu] end_blkno[%lu] steps[%u]\n",
 			sockfd, log_id, n_digest, digest_blkno, end_blkno, g_rsync_rf-1);
 
@@ -887,7 +875,7 @@ int rpc_remote_digest_response(int sockfd, int id, int dev, addr_t start_digest,
 			id, dev, n_digested, start_digest, rotated, 0);
 	msg->id = seq_n; //set immediate to sequence number in order for requester to match it
 
-	printf("peer send: %s\n", msg->data);
+	mlfs_rpc("peer send: %s\n", msg->data);
 	mlfs_info("trigger remote digest response: n_digested[%d] rotated[%d]\n", n_digested, rotated);
 
 	MP_SEND_MSG_ASYNC(sockfd, buffer_id, 0);
@@ -903,7 +891,7 @@ int rpc_forward_msg(int sockfd, char* data)
 
 	snprintf(msg->data, RPC_MSG_BYTES, "%s",data);
 
-	mlfs_printf("peer send: %s\n", msg->data);
+	mlfs_rpc("peer send: %s\n", msg->data);
 
 	MP_SEND_MSG_ASYNC(sockfd, buffer_id, 1);
 	return 0;
@@ -916,7 +904,7 @@ int rpc_bootstrap(int sockfd)
 	struct app_context *msg;
 	int buffer_id = MP_ACQUIRE_BUFFER(sockfd, &msg);
 	snprintf(msg->data, RPC_MSG_BYTES, "|bootstrap |%u", getpid());
-	mlfs_printf("DEBUG sockfd %d g_rpc_socks[sockfd] %p, msg '%s'\n", sockfd, g_rpc_socks[sockfd], msg->data);
+	mlfs_rpc("peer send: %s\n", msg->data);
 	msg->id = generate_rpc_seqn(g_rpc_socks[sockfd]);
 
 	MP_SEND_MSG_ASYNC(sockfd, buffer_id, 1);
@@ -937,7 +925,7 @@ int rpc_bootstrap_response(int sockfd, uint32_t seq_n)
 	snprintf(msg->data, RPC_MSG_BYTES, "|bootstrap |%u", g_rpc_socks[sockfd]->peer->id);
 	msg->id = seq_n; //set immediate to sequence number in order for requester to match it
 
-	mlfs_printf("send: %s\n", msg->data);
+	mlfs_rpc("peer send: %s\n", msg->data);
 	MP_SEND_MSG_ASYNC(sockfd, buffer_id, 0);
 }
 

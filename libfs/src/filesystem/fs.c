@@ -60,6 +60,8 @@ pthread_rwlock_t *g_fcache_rwlock;
 pthread_rwlock_t *shm_slab_rwlock;
 pthread_rwlock_t *shm_lru_rwlock;
 
+pthread_rwlock_t *g_debug_rwlock;
+
 #if MLFS_LEASE
 SharedTable *lease_table;
 #endif
@@ -164,7 +166,7 @@ void shutdown_fs(void)
 	shutdown_rpc();
 
 	//free read cache memory
-	free(g_fcache_base);
+	//free(g_fcache_base);
 
 #if MLFS_LEASE
 	shutdown_lease_protocol();
@@ -185,6 +187,8 @@ void shutdown_fs(void)
 	if (ret == -1)
 		panic("cannot close shared memory\n");
 	*/
+
+	initialized = 0;
 
 	return ;
 }
@@ -277,11 +281,7 @@ static void cache_init(void)
 	dlookup_hash = NULL;
 	lru_hash = NULL;
 #if MLFS_LEASE
-#ifndef LEASE_OPT
 	lease_table = SharedTable_mock();
-#else
-	lease_table = SharedTable_subscribe("/lease");
-#endif
 #endif
 
 #ifdef DISTRIBUTED
@@ -319,6 +319,8 @@ static void locks_init(void)
 	shm_slab_rwlock = (pthread_rwlock_t *)mlfs_alloc(sizeof(pthread_rwlock_t));
 	shm_lru_rwlock = (pthread_rwlock_t *)mlfs_alloc(sizeof(pthread_rwlock_t));
 
+	g_debug_rwlock = (pthread_rwlock_t *)mlfs_zalloc(sizeof(pthread_rwlock_t));
+
 	pthread_rwlock_init(icache_rwlock, &rwlattr);
 	pthread_rwlock_init(icreate_rwlock, &rwlattr);
 	pthread_rwlock_init(dlookup_rwlock, &rwlattr);
@@ -327,6 +329,8 @@ static void locks_init(void)
 
 	pthread_rwlock_init(shm_slab_rwlock, &rwlattr);
 	pthread_rwlock_init(shm_lru_rwlock, &rwlattr);
+
+	pthread_rwlock_init(g_debug_rwlock, &rwlattr);
 }
 
 #ifdef DISTRIBUTED
@@ -646,27 +650,29 @@ struct inode* ialloc(uint32_t inum, struct dinode *dip)
 	ip->flags = 0;
 	ip->flags |= I_VALID;
 	ip->i_ref = 1;
-	ip->n_de_cache_entry = 0;
 	ip->i_dirty_dblock = RB_ROOT;
 	ip->i_sb = sb;
 
 	pthread_rwlockattr_setpshared(&rwlattr, PTHREAD_PROCESS_SHARED);
 	pthread_rwlock_init(&ip->fcache_rwlock, &rwlattr);
 
-	ip->fcache = NULL;
-	ip->n_fcache_entries = 0;
-
 #ifdef KLIB_HASH
 	ip->fcache_hash = kh_init(fcache);
 	ip->de_cache_hash = kh_init(de_cache);
 #endif
 
+	ip->n_fcache_entries = 0;
+	ip->n_de_cache_entry = 0;
+
+	ip->fcache = NULL;
 	ip->de_cache = NULL;
+
 	pthread_rwlock_init(&ip->de_cache_rwlock, &rwlattr);
 
 	INIT_LIST_HEAD(&ip->i_slru_head);
 
 	bitmap_set(sb[g_root_dev]->s_inode_bitmap, inum, 1);
+
 	return ip;
 }
 
@@ -680,7 +686,7 @@ struct inode* icreate(uint8_t type)
 	struct inode *ip;
 	pthread_rwlockattr_t rwlattr;
 
-	//pthread_rwlock_wrlock(icreate_rwlock);
+	pthread_rwlock_wrlock(icreate_rwlock);
 
 #ifndef DISTRIBUTED
 	// FIXME: hard coded. used for testing multiple applications.
@@ -708,7 +714,7 @@ struct inode* icreate(uint8_t type)
 
 	ip = ialloc(inum, &dip);
 
-	//pthread_rwlock_unlock(icreate_rwlock);
+	pthread_rwlock_unlock(icreate_rwlock);
 
 	return ip;
 }

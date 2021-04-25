@@ -16,7 +16,9 @@
 #include <numa.h>
 #include <utmpx.h>
 
-#ifdef IOAT
+#define INCLUDE_IOAT 0
+
+#ifdef INCLUDE_IOAT
 #include "spdk/ioat.h"
 #include "spdk/env.h"
 #endif
@@ -62,7 +64,7 @@ typedef unsigned long addr_t;
 
 int g_socket_id; //socket id of core executing main()
 
-#ifdef IOAT
+#ifdef INCLUDE_IOAT
 /* ioat vars */
 int n_ioat_chan;
 int last_ioat_socket = -1;
@@ -101,7 +103,7 @@ double rd_bps[MAX_THREADS];
 
 static void hexdump(void *mem, unsigned int len);
 
-#ifdef IOAT
+#ifdef INCLUDE_IOAT
 bool probe_cb(void* cb_ctx, spdk_pci_device* pci_device);
 void attach_cb(void* cb_ctx, spdk_pci_device* pci_device, spdk_ioat_chan* ioat);
 #endif
@@ -173,7 +175,7 @@ int mem_init(int dev, ssize_t map_size)
 	//map at least 1 GB (otherwise, we experience failures with devdax)
 	if(map_size < MIN_MAP_SIZE)
 		map_size = MIN_MAP_SIZE;
-#ifdef IOAT
+#ifdef INCLUDE_IOAT
 	struct spdk_env_opts opts;
 	spdk_env_opts_init(&opts);
 	spdk_env_init(&opts);
@@ -209,7 +211,7 @@ int mem_init(int dev, ssize_t map_size)
 	}
 	else {
 
-#ifndef IOAT
+#ifndef INCLUDE_IOAT
 		mem_base_addr = (uint8_t *)mmap(NULL, map_size, PROT_READ | PROT_WRITE,
 				MAP_ANONYMOUS| MAP_PRIVATE| MAP_POPULATE, -1, 0);
 				//MAP_ANONYMOUS| MAP_PRIVATE, -1, 0);
@@ -294,7 +296,7 @@ void mem_exit(uint8_t dev, ssize_t map_size)
  * 
  *****************************************************/
 
-#ifdef IOAT
+#ifdef INCLUDE_IOAT
 
 int ioat_init(int dev, ssize_t map_size)
 {
@@ -307,7 +309,7 @@ int ioat_init(int dev, ssize_t map_size)
 	ioat_pending = (int*) calloc(n_threads, sizeof(int));
 
 	n_ioat_chan = 0;
-	ioat_chans = (spdk_ioat_chan**)spdk_dma_zmalloc(n_threads*sizeof(struct spdk_ioat_chan*),
+	ioat_chans = (struct spdk_ioat_chan**)spdk_dma_zmalloc(n_threads*sizeof(struct spdk_ioat_chan*),
 		    0, nullptr);
 
 	if (!ioat_chans) {
@@ -764,7 +766,7 @@ void mem_bench::prepare(void)
 		printf("thread %d opened file[%d]: %s\n", id, fsfd, file_path);
 	} 
 
-#ifdef IOAT
+#ifdef INCLUDE_IOAT
 	if(test_mode == IOAT) {
 		io_buf[id] = (uint64_t*)spdk_dma_zmalloc_socket(io_size, 2*1024*1024, nullptr,
 				remote_numa?!g_socket_id:g_socket_id);
@@ -874,7 +876,7 @@ void mem_bench::do_write(void)
 #ifdef VERIFY
 			// Note: for DMAs, verify only works if we're performing dmas synchronously
 			// verify buffer
-#ifdef IOAT
+#ifdef INCLUDE_IOAT
 			if(test_mode == IOAT)
 				ioat_drain(id);
 #endif
@@ -1106,7 +1108,7 @@ void mem_bench::do_exit()
 		case NVMe: 
 			//delete io_buf;
 			break;
-#ifdef IOAT
+#ifdef INCLUDE_IOAT
 		case IOAT:
 			//spdk_free(io_buf);
 			break;

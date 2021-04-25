@@ -4,12 +4,9 @@ DPDK_VER := 16.11
 all:	download
 	#if [ ! -d "dpdk-$(DPDK_VER)" ]; then tar xf dpdk-$(DPDK_VER).tar.xz; fi
 	#sudo make install -C dpdk-$(DPDK_VER) T=x86_64-native-linuxapp-gcc DESTDIR=dpdk-$(DPDK_VER)/ -j8
-	sudo apt install -y libndctl-dev libdaxctl-dev
 	make -C nvml -j8
-	sudo apt install -y build-essential cmake gcc libudev-dev libnl-3-dev libnl-route-3-dev ninja-build pkg-config valgrind
 	(cd rdma-core && ./build.sh)
 	(cd rdma && make)
-	sudo apt install -y pkg-config libcapstone-dev
 	(cd syscall_intercept; \
 	 mkdir build; \
 	 mkdir install; \

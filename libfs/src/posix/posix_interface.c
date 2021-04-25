@@ -296,15 +296,59 @@ int mlfs_posix_write(int fd, uint8_t *buf, size_t count)
 		return -EBADF;
 	}
 
-	if (enable_perf_stats)
-		start_tsc_tmp = asm_rdtscp();
+	//if (enable_perf_stats)
+	//	start_tsc_tmp = asm_rdtscp();
 
-	ret = mlfs_file_write(f, buf, count);
+	ret = mlfs_file_write(f, buf, count, f->off);
 
 	pthread_rwlock_unlock(&f->rwlock);
 
 	//if (enable_perf_stats)
 	//	g_perf_stats.tmp_tsc += (asm_rdtscp() - start_tsc_tmp);
+
+	return ret;
+}
+
+int mlfs_posix_pwrite64(int fd, uint8_t *buf, size_t count, loff_t off)
+{
+	int ret;
+	struct file *f;
+
+	uint64_t start_tsc_tmp;
+
+	if (enable_perf_stats)
+		start_tsc_tmp = asm_rdtscp();
+
+	mlfs_posix("[POSIX] write(fd=%d, size=%lu)\n", fd, count);
+
+#ifdef DISTRIBUTED
+	//NOTE: we currently impose a 16 MB iosize limit (due to size of 'imm' for RDMA RPCs)
+	assert(count <= 16384 * 1024);
+#endif
+
+	f = &g_fd_table.open_files[fd];
+
+	pthread_rwlock_wrlock(&f->rwlock);
+
+	mlfs_assert(f);
+
+	if (f->ref == 0) {
+		panic("file descriptor is wrong\n");
+                errno = EBADF;
+                return -1;
+	}
+
+	ret = mlfs_file_write(f, buf, count, off);
+
+	// change offset here since mlfs_file_write doesn't touch f->off
+	if (ret > 0) {
+		f->off += ret;
+	}
+
+	pthread_rwlock_unlock(&f->rwlock);
+
+	if (enable_perf_stats)
+		g_perf_stats.tmp_tsc += (asm_rdtscp() - start_tsc_tmp);
 
 	return ret;
 }
@@ -460,6 +504,8 @@ void *mlfs_posix_mmap(int fd)
 	uint64_t blk_found;
 	uint64_t blk_base;
 	bmap_req_t bmap_req;
+
+	mlfs_posix("[POSIX] mmap(fd=%d)", fd);
 
 	f = &g_fd_table.open_files[fd];
 	if (f->ref == 0) {
@@ -792,6 +838,8 @@ int mlfs_posix_fcntl(int fd, int cmd, void *arg)
 {
 	struct file *f;
 	int ret = 0;
+
+	mlfs_posix("[POSIX] fcntl(fd=%d, cmd=%d)", fd, cmd);
 
 	f = &g_fd_table.open_files[fd];
 
