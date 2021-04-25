@@ -221,7 +221,8 @@ void shutdown_log()
 	// wait until the peer finishes all outstanding replication requests.
 	if (get_next_peer()->outstanding) {
 		mlfs_info("%s", "[L] Wait finishing on-going peer replication\n");
-		wait_on_peer_replicating(get_next_peer());
+		for(int i=0; i<N_RSYNC_THREADS+1; i++)
+			wait_on_peer_replicating(get_next_peer(), i);
 	}
 
 	// wait until the peer's digest_thread finishes job.
@@ -657,7 +658,7 @@ static int persist_log_inode(struct logheader_meta *loghdr_meta, uint32_t idx)
 
 	nr_logblocks = 1;
 
-	mlfs_assert(log_bh->b_blocknr < g_fs_log->next_avail_header);
+	//mlfs_assert(log_bh->b_blocknr < g_fs_log->next_avail_header);
 	mlfs_assert(log_bh->b_dev == g_fs_log->dev);
 
 	mlfs_debug("inum %u offset %lu @ blockno %lx\n",
@@ -936,7 +937,8 @@ static uint32_t compute_log_blocks(struct logheader_meta *loghdr_meta)
 		switch(type) {
 			case L_TYPE_UNLINK:
 			case L_TYPE_INODE_CREATE:
-			case L_TYPE_INODE_UPDATE: {
+			case L_TYPE_INODE_UPDATE:
+			case L_TYPE_ALLOC: {
 				nr_log_blocks++;
 				break;
 			} 
@@ -1004,6 +1006,8 @@ static void persist_log_blocks(struct logheader_meta *loghdr_meta)
 				n_iovec++;
 				break;
 			}
+			case L_TYPE_ALLOC:
+				break;
 			default: {
 				panic("unsupported log type\n");
 				break;
@@ -1177,7 +1181,7 @@ static void commit_log(void)
 		//if (enable_perf_stats)
 		//	tsc_begin = asm_rdtscp();
 
-		update_peer_sync_state(get_next_peer(), loghdr->nr_log_blocks);
+		update_peer_sync_state(get_next_peer(), loghdr->nr_log_blocks, 0);
 
 		//trigger asynchronous replication if we exceed our chunk size
  		if(g_n_nodes > 1 && g_rsync_chunk && atomic_load(&get_next_peer()->n_unsync_blk) > g_rsync_chunk) {
@@ -1256,7 +1260,8 @@ void add_to_loghdr(uint8_t type, struct inode *inode, offset_t data,
 	if (type == L_TYPE_FILE ||
 			type == L_TYPE_DIR_ADD ||
 			type == L_TYPE_DIR_RENAME ||
-			type == L_TYPE_DIR_DEL) 
+			type == L_TYPE_DIR_DEL ||
+			type == L_TYPE_ALLOC)
 		// offset in file.
 		loghdr->data[i] = (offset_t)data;
 	else
@@ -1280,9 +1285,11 @@ void add_to_loghdr(uint8_t type, struct inode *inode, offset_t data,
 		mlfs_assert(ext_used <= 2048);
 	}
 
-	mlfs_debug("add_to_loghdr [%s] type %u inum %u\n", (type == L_TYPE_FILE? "FILE" :
+	mlfs_debug("add_to_loghdr [%s] inum %u\n", (type == L_TYPE_FILE? "FILE" :
 				type == L_TYPE_DIR_ADD? "DIR_ADD" : type == L_TYPE_DIR_RENAME? "DIR_RENAME" :
-				type == L_TYPE_DIR_DEL? "DIR_DEL" : "UNKNOWN"), type, inode->inum);
+				type == L_TYPE_DIR_DEL? "DIR_DEL" : type == L_TYPE_INODE_CREATE? "INODE_CREATE" :
+				type == L_TYPE_INODE_UPDATE? "INODE_UDPATE" : type == L_TYPE_UNLINK? "UNLINK" :
+				type == L_TYPE_ALLOC? "ALLOC" : "UNKNOWN"), inode->inum);
 
 	/*
 		 if (type != L_TYPE_FILE)
@@ -1301,8 +1308,8 @@ int mlfs_do_rdigest(uint32_t n_digest)
 	//mlfs_do_rsync();
 	//make_replication_request_async(0);
 
-	MP_AWAIT_PENDING_WORK_COMPLETIONS(get_next_peer()->info->sockfd[SOCK_IO]);
-	m_barrier();
+	//MP_AWAIT_PENDING_WORK_COMPLETIONS(get_next_peer()->info->sockfd[SOCK_IO]);
+	//m_barrier();
 
 	//mlfs_assert(get_next_peer()->start_digest <= get_next_peer()->remote_start);
 	//struct rpc_pending_io *pending[g_n_nodes];
@@ -1349,9 +1356,9 @@ void signal_callback(struct app_context *msg)
 		sscanf(msg->data, "|%s |", cmd_hdr);
 		mlfs_debug("received rpc with body: %s on sockfd %d\n", msg->data, msg->sockfd);
 	}
-	else
-		return;
-
+	else {
+		cmd_hdr[0] = 'i';
+	}
 
 	// master/slave callbacks
 	// handles 2 message types (digest)
@@ -1489,8 +1496,9 @@ void signal_callback(struct app_context *msg)
 		panic("invalid code path\n");
 #endif
 	}
-	else if(cmd_hdr[0] == 'i') //rdma immediate notification (ignore)
-		return;
+	else if(cmd_hdr[0] == 'i') { //rdma immediate notification
+		clear_peer_syncing(get_next_peer(), msg->id);
+	}
 	else
 		panic("unidentified remote signal\n");
 
@@ -1583,10 +1591,15 @@ uint32_t make_digest_request_sync(int percent)
 	if(g_n_nodes > 1 && atomic_load(&get_next_peer()->n_digest) < g_fs_log->n_digest_req)
 		mlfs_do_rsync();
 
+	for(int i=0; i<N_RSYNC_THREADS+1; i++)
+		wait_on_peer_replicating(get_next_peer(), i);
+
 	//FIXME: just for testing; remove this line
 	//g_fs_log->n_digest_req = 10 * n_digest / 100;
-	if(g_n_nodes > 1)
+	if(g_n_nodes > 1) {
+		mlfs_assert(atomic_load(&get_next_peer()->n_digest) >= g_fs_log->n_digest_req);
 		atomic_fetch_sub(&get_next_peer()->n_digest, g_fs_log->n_digest_req);
+	}
 
 #else
 	n_digest = atomic_load(&g_log_sb->n_digest);
@@ -1599,13 +1612,7 @@ uint32_t make_digest_request_sync(int percent)
 
 	mlfs_printf("%s\n", cmd);
 
-#if 0
-	// send digest command
-	ret = sendto(g_fs_log->kernfs_fd, cmd, MAX_SOCK_BUF, 0, 
-			(struct sockaddr *)&g_fs_log->kernfs_addr, len);
-#else
 	rpc_forward_msg(g_kernfs_peers[g_kernfs_id]->sockfd[SOCK_BG], cmd);
-#endif
 
 	mlfs_do_rdigest(g_fs_log->n_digest_req);
 
@@ -1656,7 +1663,7 @@ void handle_digest_response(char *ack_cmd)
 
 	if (rotated) {
 		atomic_add(&g_fs_log->start_version, 1);
-		mlfs_info("-- log head is rotated: new start %lu new end %lu start_version %u avail_version %u\n",
+		mlfs_printf("-- log head is rotated: new start %lu new end %lu start_version %u avail_version %u\n",
 				g_fs_log->next_avail_header, atomic_load(&g_log_sb->end),
 				g_fs_log->start_version, g_fs_log->avail_version);
 		if(g_fs_log->start_version == g_fs_log->avail_version)
