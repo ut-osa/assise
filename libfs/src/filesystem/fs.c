@@ -151,7 +151,7 @@ void shutdown_fs(void)
 	int ret;
 	int _enable_perf_stats = enable_perf_stats;
 
-	if (!initialized) {
+	if(!cmpxchg(&initialized, 1, 0)) {
 		return ;
 	}
 
@@ -187,8 +187,6 @@ void shutdown_fs(void)
 	if (ret == -1)
 		panic("cannot close shared memory\n");
 	*/
-
-	initialized = 0;
 
 	return ;
 }
@@ -409,11 +407,9 @@ void init_fs(void)
 	sigaction(SIGINT, &action, NULL);
 	sigaction(SIGTERM, &action, NULL);
 
-	if (!initialized) {
+	if(!cmpxchg(&initialized, 0, 1)) {
 		const char *perf_profile;
 		int i;
-
-		initialized = 1;
 
 #ifdef USE_SLAB
 		mlfs_slab_init(memsize_gb << 30);
@@ -475,6 +471,8 @@ void init_fs(void)
 		clock_speed_mhz = get_cpu_clock_speed();
 
 	}
+	else
+		mlfs_printf("LibFS already initialized. Skipping..%s\n", "");
 }
 
 ///////////////////////////////////////////////////////////////////////

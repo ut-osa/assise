@@ -17,7 +17,9 @@
 #include <string>
 #include <vector>
 
+#ifdef MLFS
 #include "mlfs/mlfs_interface.h"
+#endif
 
 #include "time_stat.h"
 #include "thread.h"
@@ -67,7 +69,7 @@ void io_bench::prepare(void)
 {
 	int ret;
 
-	init_fs();
+	//init_fs();
 
 	ret = mkdir(test_dir_prefix, 0777);
 
@@ -376,7 +378,7 @@ int main(int argc, char *argv[])
 	fflush(stdout);
 	fflush(stderr);
 
-	shutdown_fs();
+	//shutdown_fs();
 
 	return 0;
 }

@@ -18,7 +18,7 @@ int g_rsync_rf = g_n_nodes;	//default: replicate to all nodes
 int log_idx = 0;
 
 #ifdef KERNFS
-struct replication_context *g_sync_ctx[g_n_max_libfs];
+struct replication_context *g_sync_ctx[g_n_max_libfs + g_n_nodes];
 #else
 struct replication_context *g_sync_ctx[g_n_nodes];
 #endif

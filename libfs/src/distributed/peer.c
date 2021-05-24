@@ -233,12 +233,14 @@ void register_peer_log(struct peer_id *peer, int find_id)
 	if(find_id) {
 		idx = find_first_zero_bit(peer_bitmap, peer_bitmap_size);
 		mlfs_debug("peer id: %u bitmap: %lu\n", idx, peer_bitmap[0]);
-		print_bits(peer_bitmap[0]);
+		//print_bits(peer_bitmap[0]);
 	}
 	else {
 		idx = peer->id;
 	}
 
+	if(idx >= g_n_max_libfs + g_n_nodes)
+		panic("Unable to register LibFS log. Try increasing g_n_max_libfs\n");
 
 	mlfs_info("assigning peer (ip: %s pid: %u) to log id %d\n", peer->ip, peer->pid, idx);
 	peer->id = idx;

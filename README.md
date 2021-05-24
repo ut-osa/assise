@@ -192,7 +192,7 @@ For more advanced configurations, we describe additional parameters.
     * -DDIGEST_OPT: Enable log coalescing during digestion.
     
 * **Both Makefiles**
-    * -DISTRIBUTED: Use Assise in distributed mode (otherwise, Assise runs as a single-process local filesystem).
+    * -DISTRIBUTED: Use Assise in distributed mode (always keep this enabled; to-be-removed in the future).
     * -USE_LEASE : Enable leases for LibFS/KernFS.
     * -USE_SSD: Enable usage of an SSD.
 
@@ -206,7 +206,7 @@ For more advanced configurations, we describe additional parameters.
     * g_n_max_libfs: Maximum number of LibFS processes allowed to run simultaneously.
     * g_max_read_cache_blocks: Maximum number of read cache blocks.
  
-**Note:** g_n_max_libfs * g_log_size should be <= dev_size[g_log_dev].
+**Note:** (g_n_max_libfs + g_n_hot_rep) * g_log_size should be <= dev_size[g_log_dev].
 
 ## Troubleshooting ##
 

@@ -45,9 +45,6 @@ small_io: small_io.c
 append_test: append_test.c
 	$(CC) -g -o $@ $^ -I$(INCLUDES) -L$(LIBFS_DIR) -lmlfs -L$(RDMA_CORE_DIR) -L$(RDMA_DIR) $(LDFLAGS)
 
-mkdir_user: mkdir_user.c
-	$(CC) -g -o $@ $^ -I$(INCLUDES) -L$(LIBFS_DIR) -lmlfs -L$(RDMA_CORE_DIR) -L$(RDMA_DIR) $(LDFLAGS)
-
 signal_test: signal_test.c
 	$(CC) -g -o $@ $^ -I$(INCLUDES) -L$(LIBFS_DIR) -lmlfs -L$(RDMA_CORE_DIR) -L$(RDMA_DIR) $(LDFLAGS)
 
@@ -80,9 +77,6 @@ maildir_test: maildir_test.c time_stat.o
 
 mkdir_test: mkdir_test.c time_stat.o
 	$(CC) -g -o $@ $^ -I$(INCLUDES) -L$(LIBFS_DIR) -lmlfs -DMLFS $(CFLAGS) -L$(RDMA_CORE_DIR) -L$(RDMA_DIR) $(LDFLAGS)
-
-write_read: write_read.c time_stat.o
-	$(CC) -g -o $(addsuffix .normal, $@) $^ $(CFLAGS) $(DAX_OBJ) -L$(NVML_DIR) -L$(RDMA_CORE_DIR) -L$(RDMA_DIR) -lpmem -lpthread -lm -lrt  -Wl,-rpath=$(abspath $(NVML_DIR))
 
 iotest: iotest.cc time_stat.o thread.cc
 	$(CXX) -std=c++11 -g -Ofast -o $@ $^  -I$(INCLUDES) -L$(LIBFS_DIR) -lmlfs  -L$(RDMA_CORE_DIR) -L$(RDMA_DIR) -DMLFS $(CFLAGS) $(LDFLAGS)

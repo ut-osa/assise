@@ -13,7 +13,7 @@
 #define N_RSYNC_THREADS 2
 
 #ifdef KERNFS
-extern struct replication_context *g_sync_ctx[g_n_max_libfs];
+extern struct replication_context *g_sync_ctx[g_n_max_libfs + g_n_nodes];
 #else
 extern struct replication_context *g_sync_ctx[g_n_nodes];
 #endif

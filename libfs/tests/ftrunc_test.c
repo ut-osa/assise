@@ -25,7 +25,7 @@ int main(int argc, char ** argv)
 	unsigned long file_size;
 	struct stat statbuf;
 
-	init_fs();
+	//init_fs();
 
 	ret = mkdir("/mlfs/", 0600);
 
@@ -100,7 +100,7 @@ int main(int argc, char ** argv)
 
 	unlink(FILE_NAME);
 
-	shutdown_fs();
+	//shutdown_fs();
 
 	return 0;
 }

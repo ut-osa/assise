@@ -6,12 +6,11 @@
 
 #include <mlfs/mlfs_interface.h>	
 
-
 int main(int argc, char ** argv)
 {
-	struct stat st = {0};
+    struct stat st = {0};
 
-	init_fs();
+    //init_fs();
 
     char const* const fileName = "userlist.dat"; /* should check that argc > 1 */
     char const* mlfs_dir = "/mlfs/";
@@ -42,6 +41,7 @@ int main(int argc, char ** argv)
 
     fclose(file);
 
-	shutdown_fs();
-	return 0;
+    //shutdown_fs();
+
+    return 0;
 }

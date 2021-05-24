@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <dirent.h>
 #include <fcntl.h>
+
 #include <mlfs/mlfs_interface.h>
 
 int main(int argc, char ** argv)
@@ -9,7 +10,8 @@ int main(int argc, char ** argv)
 
     DIR * dir;
     
-    init_fs();
+    //init_fs();
+
     dir = opendir("/mlfs");
 
 	//dir_test creates 1000 files in /mlfs/test_dir/files
@@ -19,6 +21,8 @@ int main(int argc, char ** argv)
         printf("found %s\n", dirent->d_name);
 
     closedir(dir);
+
+    //shutdown_fs();
 
     return 0;
 }
