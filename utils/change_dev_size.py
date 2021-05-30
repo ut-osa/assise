@@ -29,7 +29,7 @@ def main():
     return -1
 
   f_contents = str()
-  with open(storage_h, "r+b") as f:
+  with open(storage_h, "r+") as f:
     f_contents = f.read()
 
     pattern = r'(^static uint64\_t dev\_size[^{}]*) {[^{}]*}(.*)'
