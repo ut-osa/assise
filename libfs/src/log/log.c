@@ -1496,9 +1496,11 @@ void signal_callback(struct app_context *msg)
 		panic("invalid code path\n");
 #endif
 	}
-	else if(cmd_hdr[0] == 'i') { //rdma immediate notification
+	else if(cmd_hdr[0] == 'i') { //immediate completions are replication notifications
 		clear_peer_syncing(get_next_peer(), msg->id);
 	}
+	else if(cmd_hdr[0] == 'a') //ack (ignore)
+		return;
 	else
 		panic("unidentified remote signal\n");
 

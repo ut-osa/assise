@@ -139,6 +139,7 @@ int rpc_lease_migrate(int peer_id, uint32_t inum, uint32_t kernfs_id);
 int rpc_replicate_log_sync(peer_meta_t *peer, struct list_head *rdma_entries, uint32_t imm);
 struct rpc_pending_io * rpc_replicate_log_async(peer_meta_t *peer, struct list_head *rdma_entries, uint32_t imm);
 struct rpc_pending_io * rpc_replicate_log(peer_meta_t *peer, struct list_head *rdma_entries, uint32_t imm, int do_sync);
+int rpc_send_imm(int sockfd, uint32_t seqn);
 int rpc_send_ack(int sockfd, uint32_t seqn);
 struct mlfs_reply * rpc_get_reply_object(int sockfd, uint8_t *dst, uint32_t seqn);
 void rpc_await(struct rpc_pending_io *pending);

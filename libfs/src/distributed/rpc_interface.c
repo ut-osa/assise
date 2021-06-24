@@ -693,10 +693,8 @@ struct rpc_pending_io * rpc_replicate_log(peer_meta_t *peer, struct list_head *r
 	return rpc;
 }
 
-//acknowledge completion of an rpc
-int rpc_send_ack(int sockfd, uint32_t seqn)
+int rpc_send_imm(int sockfd, uint32_t seqn)
 {
-#ifdef KERNFS
 	rdma_meta_t *meta = create_rdma_ack();
 	if(seqn) {
 		meta->imm = seqn; //set immediate to sequence number in order for requester to match it (in case of io wait)
@@ -704,7 +702,11 @@ int rpc_send_ack(int sockfd, uint32_t seqn)
 	}
 
 	mlfs_rpc("peer send: ack on sock:%d with seqn: %u\n", sockfd, seqn);
-#else
+}
+
+//acknowledge completion of an rpc
+int rpc_send_ack(int sockfd, uint32_t seqn)
+{
 	struct app_context *msg;
 
 	//int sockfd = g_peers[id]->sockfd[SOCK_BG];
@@ -720,7 +722,7 @@ int rpc_send_ack(int sockfd, uint32_t seqn)
 
 	mlfs_rpc("peer send: %s\n", msg->data);
 	MP_SEND_MSG_ASYNC(sockfd, buffer_id, 0);
-#endif
+
 	return 0;
 }
 

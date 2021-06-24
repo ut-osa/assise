@@ -155,9 +155,12 @@ int main(int argc, char *argv[])
 		storage_mode = NVM;
 	}
 
-	// Bypass dev-dax mmap problem: use actual device size - 550 MB.
-	file_size_bytes = dev_size[dev_id] - (4 << 20);
+
+	file_size_bytes = dev_size[dev_id];
 	file_size_blks = file_size_bytes >> g_block_size_shift;
+
+	// make sure device size is at least 4 MB (TODO: test if this is the minimum supported dev size)
+	mlfs_assert(file_size_bytes >= (4 << 20));
 
 	if(dev_id == g_log_dev) {
 		log_size_blks = g_log_size * (g_n_max_libfs + g_n_nodes) + (1UL * (1 << 10));

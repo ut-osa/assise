@@ -2319,7 +2319,7 @@ void signal_callback(struct app_context *msg)
 		if(last_in_chain && ack) {
 			mlfs_info("last_in_chain -> send replication response to peer %d on sockfd %u\n",
 					node_id, g_peers[node_id]->sockfd[SOCK_IO]);
-			rpc_send_ack(g_peers[node_id]->sockfd[SOCK_IO], seqn);
+			rpc_send_imm(g_peers[node_id]->sockfd[SOCK_IO], seqn);
 		}
 
 	}

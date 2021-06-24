@@ -447,10 +447,6 @@ int acquire_lease(uint32_t inum, int type, char *path)
 
 	pthread_spin_lock(&ls->mutex);
 
-	// FIXME: Use inum instead of path for read RPCs
-	// temporarily trimming paths to reduce overheads
-	//char trimmed_path[MAX_REMOTE_PATH];
-	//snprintf(trimmed_path, MAX_REMOTE_PATH, "%s", path);
 retry:
 
 	if(type > ls->state || ls->hid != g_self_id) {
@@ -504,18 +500,17 @@ retry:
 	if(i_dirty) {
 		// update size after acquiring inode
 		// necessary to prevent issues with directory allocation
+
+		struct dinode dip;
 		struct inode *ip;
 		ip = icache_find(inum);
 
 		ilock(ip);
-		// no need to update size for dirty inodes
-		//if (ip && !(ip->flags & I_DIRTY)) {
-		//	struct dinode dip;
-		//	read_ondisk_inode(inum, &dip);
 
-		//	ip->size = dip.size;
-		//}
-		sync_inode_ext_tree(ip);
+		//XXX: check for potential concurrency issues if reading while dinode is being updated by kernfs
+		read_ondisk_inode(inum, &dip);
+		sync_inode_from_dinode(ip, &dip);
+
 		iunlock(ip);
 	}
 #endif
