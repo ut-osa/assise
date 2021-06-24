@@ -24,7 +24,7 @@
 
 static inline int check_mlfs_fd(int fd)
 {
-  if (fd >= FD_START)
+  if (fd >= g_fd_start)
     return 1;
   else
     return 0;
@@ -32,8 +32,8 @@ static inline int check_mlfs_fd(int fd)
 
 static inline int get_mlfs_fd(int fd)
 {
-  if (fd >= FD_START)
-    return fd - FD_START;
+  if (fd >= g_fd_start)
+    return fd - g_fd_start;
   else
     return fd;
 }
