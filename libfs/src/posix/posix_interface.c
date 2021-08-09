@@ -301,6 +301,11 @@ int mlfs_posix_write(int fd, uint8_t *buf, size_t count)
 
 	ret = mlfs_file_write(f, buf, count, f->off);
 
+	// change offset here since mlfs_file_write doesn't touch f->off
+	if (ret > 0) {
+		f->off += ret;
+	}
+
 	pthread_rwlock_unlock(&f->rwlock);
 
 	//if (enable_perf_stats)
