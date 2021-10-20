@@ -48,7 +48,7 @@
 
 #define ibw_unused(expr) do { (void)(expr); } while (0)
 
-unsigned int g_seed;
+extern unsigned int g_seed;
 
 inline void set_seed(int seed) {
 	g_seed = seed;

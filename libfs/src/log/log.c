@@ -91,7 +91,7 @@ pthread_mutex_t *g_log_mutex_shared;
 static unsigned long digest_thread_id[g_n_devices];
 //Thread entry point
 void *digest_thread(void *arg);
-threadpool thread_pool;
+static threadpool thread_pool;
 
 mlfs_time_t start_time;
 mlfs_time_t end_time;

@@ -69,6 +69,8 @@ SharedTable *lease_table;
 struct inode *inode_hash;
 struct dlookup_data *dlookup_hash;
 
+struct list_head *lru_heads;
+
 libfs_stat_t g_perf_stats;
 float clock_speed_mhz;
 

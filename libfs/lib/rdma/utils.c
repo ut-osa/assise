@@ -1,5 +1,7 @@
 #include "utils.h"
 
+unsigned int g_seed;
+
 __attribute__((visibility ("hidden"))) 
 void mp_die(const char *reason)
 {
