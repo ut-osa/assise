@@ -491,7 +491,7 @@ extern uint8_t *shm_base;
  *  LRU_HEADS ~ BLOOM_HEAD : bloom filter for lsm tree search
  *  BLOOM_HEAD ~           : unused	
  */ 
-struct list_head *lru_heads;
+extern struct list_head *lru_heads;
 
 typedef struct lru_key {
 	uint8_t dev;

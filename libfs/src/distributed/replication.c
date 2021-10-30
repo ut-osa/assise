@@ -25,7 +25,7 @@ struct replication_context *g_sync_ctx[g_n_nodes];
 
 __thread sync_meta_t *session;
 
-threadpool thread_pool;
+static threadpool thread_pool;
 
 static void replication_worker(void *arg);
 
