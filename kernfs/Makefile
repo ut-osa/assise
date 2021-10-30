@@ -38,7 +38,7 @@ RDMA_CORE_DIR_LIB := $(abspath $(LIBFS_DIR)/lib/rdma-core/build/lib)
 
 INCLUDES  := $(addprefix -I, . $(NVML_DIR)/include $(CUCKOO_DIR) $(CUCKOO_FILTER_DIR)/src $(GLIB_DIR)/ $(GLIB_DIR)/glib $(RDMA_DIR) $(RDMA_CORE_DIR) $(SPDK_ROOT_DIR)/include)
 
-LD_FLAGS = -lpthread -laio -lstdc++ -lm -L$(NVML_DIR)/nondebug/ -lpmem -lrt -L$(RDMA_DIR) -Wl,-rpath=$(abspath $(RDMA_DIR)) -L$(RDMA_CORE_DIR_LIB) -Wl,-rpath=$(abspath $(RDMA_CORE_DIR_LIB)) -lrdma -lrdmacm -libverbs -ldl -luuid -lnuma -L$(SPDK_ROOT_DIR) -Wl,-rpath=$(abspath $(SPDK_ROOT_DIR))
+LD_FLAGS = -lpthread -laio -lstdc++ -lm -L$(NVML_DIR)/nondebug/ -Wl,-rpath=$(abspath $(NVML_DIR)/nondebug) -lpmem -lrt -L$(RDMA_DIR) -Wl,-rpath=$(abspath $(RDMA_DIR)) -L$(RDMA_CORE_DIR_LIB) -Wl,-rpath=$(abspath $(RDMA_CORE_DIR_LIB)) -lrdma -lrdmacm -libverbs -ldl -luuid -lnuma -L$(SPDK_ROOT_DIR) -Wl,-rpath=$(abspath $(SPDK_ROOT_DIR))
 
 #MLFS_FLAGS = -DUSE_SLAB -DMLFS_INFO -DKERNFS
 MLFS_FLAGS = -DKERNFS
