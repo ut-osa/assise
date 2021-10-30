@@ -64,6 +64,8 @@ struct inode *inode_hash;
 struct disk_superblock disk_sb[g_n_devices + 1];
 struct super_block *sb[g_n_devices + 1];
 
+struct list_head *lru_heads;
+
 ncx_slab_pool_t *mlfs_slab_pool;
 ncx_slab_pool_t *mlfs_slab_pool_shared;
 
