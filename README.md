@@ -226,6 +226,11 @@ This is a known problem with libsyscall and libc v2.30-1 (see: [link](https://gi
 This indicates that KernFS is unreachable. Please make sure that KernFS is running and that its ports are not blocked by a firewall.
 ##
 
+##
+**LibFS/KernFS exits with ''ibv_reg_mr failed [error code: 12]''**
+
+This an issue with the RDMA driver being unable to pin memory pages. This could be due to a limit imposed by the OS memlock parameter. You can try increasing its value or setting it to unlimited via the command `ulimit -l unlimited`.
+
 ## License
 This software is provided under the terms of the [GNU General Public License 2](https://www.gnu.org/licenses/gpl-2.0.html).
 
