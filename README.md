@@ -228,7 +228,7 @@ This indicates that KernFS is unreachable. Please make sure that KernFS is runni
 ##
 **LibFS/KernFS exits with ''ibv_reg_mr failed [error code: 12]''**
 
-This an issue with the RDMA driver being unable to pin memory pages. This could be due to a limit imposed by the OS memlock parameter. You can try increasing its value or setting it to unlimited via the command `ulimit -l unlimited`.
+This is an issue with the RDMA driver being unable to pin memory pages. This could be due to a limit imposed by the OS' memlock parameter. You can try increasing its value or setting it to unlimited via the command `ulimit -l unlimited`.
 
 ##
 
