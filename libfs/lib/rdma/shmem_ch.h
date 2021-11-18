@@ -29,7 +29,12 @@ void shmem_chan_setup(int sockfd, volatile void *send_buf, volatile void *recv_b
 void shmem_chan_disconnect(int sockfd);
 //void shmem_chan_clear(int sockfd);
 
-void shmem_poll_loop(int sockfd);
+void shmem_poll_loop(int sockfd, int *shutdown);
+
+struct client_server_thread_args {
+	int *arg1;
+	int *arg2;
+};
 
 void * local_client_thread(void *arg);
 void * local_server_thread(void *arg);
