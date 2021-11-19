@@ -184,7 +184,7 @@ void io_bench::checkdir(void){
 		dir_re = target_d_re + "/";
 	}
 
-	if(stat(dir.c_str(), &file_info) == -1) {
+	if(stat(dir.c_str(), &file_info) < 0) {
 		//cout << "dir  not exists." << endl;
 		ret = mkdir(dir.c_str(), 0777);
 		if (ret < 0 && errno != EEXIST) { 
@@ -197,7 +197,7 @@ void io_bench::checkdir(void){
 	}
 
 	if (test_mode == 'n') {
-		if(stat(dir_re.c_str(), &file_info) == -1){
+		if(stat(dir_re.c_str(), &file_info) < 0){
 			ret = mkdir(dir_re.c_str(), 0777);
 			if (ret < 0 && errno != EEXIST) { 
 				perror("mkdir\n");
