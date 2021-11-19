@@ -2659,6 +2659,8 @@ void cache_init(uint8_t dev)
 
 #if MLFS_LEASE
 	lease_table = SharedTable_mock();
+
+	assert(lease_table);
 #endif
 }
 

@@ -60,7 +60,7 @@ SharedTable *SharedTable_mock()
 {
 	SharedTable *t = mlfs_zalloc(sizeof(SharedTable));
 	t->guts = SharedGuts_mock();
-
+	return t;
 }
 
 SharedTable *SharedTable_subscribe(const char *name)

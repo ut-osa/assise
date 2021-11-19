@@ -282,6 +282,7 @@ static void cache_init(void)
 	lru_hash = NULL;
 #if MLFS_LEASE
 	lease_table = SharedTable_mock();
+	assert(lease_table);
 #endif
 
 #ifdef DISTRIBUTED
