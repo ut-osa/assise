@@ -391,6 +391,7 @@ int digest_inode(uint8_t from_dev, uint8_t to_dev, int libfs_id,
 	}
 
 	inode->size = src_dinode->size;
+	inode->nlink = src_dinode->nlink;
 
 	mlfs_debug("[INODE] (%d->%d) inode inum %u type %d, size %lu\n",
 			from_dev, to_dev, inode->inum, inode->itype, inode->size);
