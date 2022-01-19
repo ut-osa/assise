@@ -126,7 +126,7 @@ int main(int argc, char **argv)
 			struct ibv_sge sge_entries[];
 		} rdma_meta_t;*/	
 
-	init_rdma_agent(portno, regions, 1, 256, CH_TYPE_LOCAL, add_peer_socket, remove_peer_socket, signal_callback);
+	init_rdma_agent(portno, regions, 1, 256, CH_TYPE_REMOTE, add_peer_socket, remove_peer_socket, signal_callback);
 
  	signal(SIGINT, inthand);
 

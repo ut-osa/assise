@@ -137,8 +137,8 @@ int main(int argc, char **argv)
 			struct ibv_sge sge_entries[];
 		} rdma_meta_t;*/	
  
-	init_rdma_agent(NULL, regions, 1, 256, CH_TYPE_LOCAL, add_peer_socket, remove_peer_socket, signal_callback);
- 	sockfd = add_connection(argv[1], portno, 0, CH_TYPE_LOCAL, 1);
+	init_rdma_agent(NULL, regions, 1, 256, CH_TYPE_REMOTE, add_peer_socket, remove_peer_socket, signal_callback);
+ 	sockfd = add_connection(argv[1], portno, 0, 0, CH_TYPE_REMOTE, 1);
 
 	while(!mp_is_channel_ready(sockfd)) {
         	asm("");

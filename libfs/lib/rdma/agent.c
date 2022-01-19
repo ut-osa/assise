@@ -87,6 +87,7 @@ static void* rdma_client_loop()
 
 static void* rdma_server_loop(void *port)
 {
+	int ret;
 	struct sockaddr_in6 addr;
 	struct rdma_cm_id *cm_id = NULL;
 
@@ -94,9 +95,20 @@ static void* rdma_server_loop(void *port)
 	addr.sin6_family = AF_INET6;
 	addr.sin6_port = htons(atoi(port));
 
-	rdma_create_id(ec, &cm_id, NULL, RDMA_PS_TCP);
-	rdma_bind_addr(cm_id, (struct sockaddr *)&addr);
-	rdma_listen(cm_id, 100); /* backlog=10 is arbitrary */
+	ret = rdma_create_id(ec, &cm_id, NULL, RDMA_PS_TCP);
+
+	if(ret < 0)
+		mp_die("rdma_resolve_addr failed\n");
+
+	ret = rdma_bind_addr(cm_id, (struct sockaddr *)&addr);
+
+	if(ret < 0)
+		mp_die("rdma_bind_addr failed\n");
+
+	ret = rdma_listen(cm_id, 100); /* backlog=10 is arbitrary */
+
+	if(ret < 0)
+		mp_die("rdma_listen failed\n");
 
 	printf("[RDMA-Server] Listening on port %d for connections. interrupt (^C) to exit.\n", atoi(port));
 
@@ -114,6 +126,7 @@ static void* rdma_server_loop(void *port)
 //returns socket descriptor if successful, otherwise -1
 int add_connection(char* ip, char *port, int app_type, pid_t pid, int ch_type, int polling_loop) 
 {
+	int ret;
 	int sockfd = -1;
 
 	debug_print("attempting to add connection to %s:%s\n", ip, port);
@@ -127,8 +140,15 @@ int add_connection(char* ip, char *port, int app_type, pid_t pid, int ch_type, i
 
 		getaddrinfo(ip, port, NULL, &addr);
 
-		rdma_create_id(ec, &cm_id, NULL, RDMA_PS_TCP);
-		rdma_resolve_addr(cm_id, NULL, addr->ai_addr, TIMEOUT_IN_MS);
+		ret = rdma_create_id(ec, &cm_id, NULL, RDMA_PS_TCP);
+
+		if(ret < 0)
+			mp_die("rdma_create_id failed\n");
+
+		ret = rdma_resolve_addr(cm_id, NULL, addr->ai_addr, TIMEOUT_IN_MS);
+
+		if(ret < 0)
+			mp_die("rdma_resolve_addr failed\n");
 
 		freeaddrinfo(addr);
 
