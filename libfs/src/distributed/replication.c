@@ -204,6 +204,7 @@ void update_peer_digest_state(peer_meta_t *peer, addr_t start_digest, int n_dige
 		panic("Digest was incorrect!\n");
 	}
 
+	pthread_mutex_lock(peer->shared_rsync_n_lock);
 	//printf("%s\n", "received digestion notification from slave");
 	//pthread_mutex_lock(peer->shared_rsync_addr_lock);
 
@@ -226,6 +227,7 @@ void update_peer_digest_state(peer_meta_t *peer, addr_t start_digest, int n_dige
 		peer->remote_end = 0;
 	}
 
+	pthread_mutex_unlock(peer->shared_rsync_n_lock);
 	mlfs_printf("update peer %d digest state: version %u block_nr %lu\n", peer->id, peer->start_version, peer->start_digest);
 	//pthread_mutex_unlock(peer->shared_rsync_addr_lock);
 }
@@ -980,11 +982,11 @@ static int start_rsync_session(peer_meta_t *peer, uint32_t n_blk)
 	session->remote_start = peer->remote_start;
 	session->intervals->remote_start = session->remote_start;
 
-	//make sure both of these values are synchronized for sanity checking
+
+	// lock to make sure peer attributes are properly synced
 	pthread_mutex_lock(g_sync_ctx[id]->peer->shared_rsync_n_lock);
 	session->n_unsync = atomic_load(&peer->n_unsync);
 	session->n_unsync_blk = atomic_load(&peer->n_unsync_blk);
-	pthread_mutex_unlock(g_sync_ctx[id]->peer->shared_rsync_n_lock);
 
 	//TODO: merge with log_alloc (defined in log.c)
 	addr_t nr_used_blk = 0;
@@ -996,6 +998,8 @@ static int start_rsync_session(peer_meta_t *peer, uint32_t n_blk)
 		nr_used_blk = (g_sync_ctx[id]->size - peer->start_digest);
 		nr_used_blk += (peer->remote_start - g_sync_ctx[id]->begin);
 	}
+
+	pthread_mutex_unlock(g_sync_ctx[id]->peer->shared_rsync_n_lock);
 
 	//check if remote log has undigested data that could be overwritten
 	if(nr_used_blk + session->n_unsync_blk + g_sync_ctx[id]->begin > g_sync_ctx[id]->size) {
