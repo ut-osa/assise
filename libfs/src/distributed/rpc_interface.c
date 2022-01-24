@@ -20,6 +20,7 @@ char g_self_ip[INET_ADDRSTRLEN];
 int g_self_id = -1;
 int g_kernfs_id = -1;
 int rpc_shutdown = 0;
+int socket_fds[g_n_nodes * 3];
 
 //struct timeval start_time, end_time;
 
@@ -27,6 +28,7 @@ int rpc_shutdown = 0;
 
 int init_rpc(struct mr_context *regions, int n_regions, char *listen_port, signal_cb_fn signal_callback)
 {
+	rpc_shutdown = 0;
 	assert(RPC_MSG_BYTES > MAX_REMOTE_PATH); //ensure that we can signal remote read requests (including file path)
 
 	int chan_type = -1;
@@ -138,9 +140,9 @@ int init_rpc(struct mr_context *regions, int n_regions, char *listen_port, signa
 		if(do_connect) {
 			printf("Connecting to KernFS instance %d [ip: %s]\n", i, g_kernfs_peers[i]->ip);
 
-			add_connection((char*)g_kernfs_peers[i]->ip, listen_port, SOCK_IO, pid, chan_type, always_poll);
-			add_connection((char*)g_kernfs_peers[i]->ip, listen_port, SOCK_BG, pid, chan_type, always_poll);
-			add_connection((char*)g_kernfs_peers[i]->ip, listen_port, SOCK_LS, pid, chan_type, always_poll);
+			socket_fds[(i*3) + 0] = add_connection((char*)g_kernfs_peers[i]->ip, listen_port, SOCK_IO, pid, chan_type, always_poll, &rpc_shutdown);
+			socket_fds[(i*3) + 1] = add_connection((char*)g_kernfs_peers[i]->ip, listen_port, SOCK_BG, pid, chan_type, always_poll, &rpc_shutdown);
+			socket_fds[(i*3) + 2] = add_connection((char*)g_kernfs_peers[i]->ip, listen_port, SOCK_LS, pid, chan_type, always_poll, &rpc_shutdown);
 
 		}
 	}
@@ -190,7 +192,7 @@ int init_rpc(struct mr_context *regions, int n_regions, char *listen_port, signa
 int shutdown_rpc()
 {
 	rpc_shutdown = 1;
-	shutdown_rdma_agent();
+	shutdown_rdma_agent(socket_fds, 3 * g_n_nodes);
 	return 0;
 }
 

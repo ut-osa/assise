@@ -75,7 +75,7 @@ void shmem_chan_disconnect(int sockfd)
 	free(ctx);
 }
 
-void shmem_poll_loop(int sockfd)
+void shmem_poll_loop(int sockfd, int* shutdown)
 {
 	struct conn_context *ctx = get_channel_ctx(sockfd);
 	volatile struct message *recv_msg = NULL;
@@ -92,6 +92,10 @@ void shmem_poll_loop(int sockfd)
 	printf("start shmem_poll_loop for sockfd %d\n", ctx->sockfd);
 	while(ctx->poll_enable) {
 		recv_msg = shmem_recv(ctx);
+		if(*shutdown == 1) {
+			shmem_chan_disconnect(ctx->sockfd);
+			return;
+		}
 
 		if(recv_msg) {
 			recv_msg->meta.app.sockfd = ctx->sockfd;
@@ -152,9 +156,11 @@ void shmem_poll_loop(int sockfd)
 
 }
 
-void * local_client_thread(void *arg)
+void * local_client_thread(void *args)
 {
 	printf("In thread\n");
+
+	struct client_server_thread_args *cs_args = (struct client_server_thread_args*)args;
 
 	char send_path[32];
 	char recv_path[32];
@@ -162,7 +168,7 @@ void * local_client_thread(void *arg)
 	char init_msg[128];
 	int client_socket;
 	struct sockaddr_in serv_addr;
-	int sockfd = *((int *)arg);
+	int sockfd = *(cs_args->arg1);
 
 	struct conn_context *ctx = s_conn_ctx[sockfd];
 
@@ -235,7 +241,7 @@ void * local_client_thread(void *arg)
 		}
 	}
 #endif
-	shmem_poll_loop(sockfd);
+	shmem_poll_loop(sockfd, cs_args->arg2);
 	//shmem_chan_clear(sockfd);
 
 	printf("Exit client_thread \n");
@@ -336,10 +342,13 @@ void * local_server_thread(void *arg)
 	//pthread_mutex_unlock(&lock);
 	close(ctx->realfd);
 #endif
-	shmem_poll_loop(sockfd);
+	int *shutdown = (int *)malloc(sizeof(int));
+	*shutdown = 0;
+	shmem_poll_loop(sockfd, shutdown);
 	//shmem_chan_clear(sockfd);
 
 	printf("Exit server_thread \n");
+	free(shutdown);
 
 	pthread_exit(NULL);
 }

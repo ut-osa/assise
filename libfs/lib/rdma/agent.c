@@ -1,6 +1,7 @@
 #include <sys/syscall.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <sys/socket.h>
 #include "agent.h"
 
 app_conn_cb_fn app_conn_event;
@@ -58,8 +59,23 @@ void init_rdma_agent(char *listen_port, struct mr_context *regions,
 	rdma_initialized = 1;
 }
 
-void shutdown_rdma_agent()
+void shutdown_rdma_agent(int *socket_fds, int len)
 {
+	int i;
+	struct conn_context* ctx;
+	rdma_initialized = 0;
+	void *ret;
+
+	for(i=0; i<len; i++) {
+		ctx = get_channel_ctx(socket_fds[i]);
+		if(!ctx) {
+			printf("Could not get ctx, was probably killed earlier\n");
+			continue;
+		}
+		shutdown(ctx->realfd, SHUT_RDWR);
+		pthread_join(ctx->cq_poller_thread, &ret);
+	}
+
 #if 0
 	void *ret;
 	int sockfd = -1;
@@ -124,7 +140,7 @@ static void* rdma_server_loop(void *port)
 
 //request connection to another RDMA agent (non-blocking)
 //returns socket descriptor if successful, otherwise -1
-int add_connection(char* ip, char *port, int app_type, pid_t pid, int ch_type, int polling_loop) 
+int add_connection(char* ip, char *port, int app_type, pid_t pid, int ch_type, int polling_loop, int*shutdown) 
 {
 	int ret;
 	int sockfd = -1;
@@ -161,9 +177,13 @@ int add_connection(char* ip, char *port, int app_type, pid_t pid, int ch_type, i
 
 	        sockfd = shmem_chan_add(atoi(port), -1, app_type, pid, polling_loop);
 		struct conn_context *ctx = s_conn_ctx[sockfd];
+		struct client_server_thread_args* args = malloc(sizeof(struct client_server_thread_args));
 		int *arg = malloc(sizeof(int));
 		*arg = sockfd;
-		if(pthread_create(&ctx->cq_poller_thread, NULL, local_client_thread, arg) != 0)
+
+		args->arg1 = arg;
+		args->arg2 = shutdown;
+		if(pthread_create(&ctx->cq_poller_thread, NULL, local_client_thread, args) != 0)
 			mp_die("Failed to create client_thread");
 		printf("[Local-Client] Creating connection (pid:%u, app_type:%d, status:pending) to %s:%s on sockfd %d\n",
 			pid, app_type, ip, port, sockfd);
